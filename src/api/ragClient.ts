@@ -1,4 +1,4 @@
-import type { AskResponse, SseEvent } from '../types'
+import type { AskResponse, SourceCitation, GraphRelationship, SseEvent } from '../types'
 
 const BASE_URL = (import.meta.env.VITE_RAG_API_BASE_URL as string | undefined) ?? 'http://localhost:8083'
 
@@ -18,8 +18,10 @@ export async function askComplete(question: string, signal?: AbortSignal): Promi
 }
 
 interface StreamHandlers {
-  onMetadata: (meta: { sources: string[]; graphContext: string[]; chunksRetrieved: number }) => void
+  onMetadata: (meta: { sources: SourceCitation[]; graphContext: GraphRelationship[]; chunksRetrieved: number }) => void
   onToken: (content: string) => void
+  onCorrection?: (sources: SourceCitation[], graphContext: GraphRelationship[]) => void
+  onFollowups?: (questions: string[]) => void
 }
 
 export async function askStream(question: string, handlers: StreamHandlers, signal?: AbortSignal): Promise<void> {
@@ -59,6 +61,10 @@ export async function askStream(question: string, handlers: StreamHandlers, sign
           handlers.onMetadata(parsed)
         } else if (parsed.type === 'token') {
           handlers.onToken(parsed.content)
+        } else if (parsed.type === 'correction') {
+          handlers.onCorrection?.(parsed.sources, parsed.graphContext)
+        } else if (parsed.type === 'followups') {
+          handlers.onFollowups?.(parsed.questions)
         }
       } catch {
         // Ignore partial/malformed SSE frames — the buffer will complete on the next chunk.

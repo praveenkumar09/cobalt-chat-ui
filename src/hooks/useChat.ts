@@ -13,6 +13,8 @@ export function useChat() {
   const [isBusy, setIsBusy] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([])
+  const messagesRef = useRef<Message[]>([])
+  messagesRef.current = messages
 
   const updateMessage = useCallback((id: string, patch: Partial<Message>) => {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)))
@@ -23,22 +25,8 @@ export function useChat() {
     timersRef.current = []
   }
 
-  const send = useCallback(
-    async (question: string) => {
-      const trimmed = question.trim()
-      if (!trimmed || isBusy) return
-
-      const userMessage: Message = { id: makeId(), role: 'user', content: trimmed }
-      const assistantId = makeId()
-      const assistantMessage: Message = {
-        id: assistantId,
-        role: 'assistant',
-        content: '',
-        isStreaming: true,
-        stage: 'thinking',
-      }
-
-      setMessages((prev) => [...prev, userMessage, assistantMessage])
+  const runAsk = useCallback(
+    async (question: string, assistantId: string) => {
       setIsBusy(true)
 
       const controller = new AbortController()
@@ -52,7 +40,7 @@ export function useChat() {
 
           let accumulated = ''
           await askStream(
-            trimmed,
+            question,
             {
               onMetadata: (meta) => {
                 clearTimers()
@@ -67,6 +55,12 @@ export function useChat() {
                 accumulated += token
                 updateMessage(assistantId, { content: accumulated, stage: undefined })
               },
+              onCorrection: (sources, graphContext) => {
+                updateMessage(assistantId, { sources, graphContext })
+              },
+              onFollowups: (followUpQuestions) => {
+                updateMessage(assistantId, { followUpQuestions })
+              },
             },
             controller.signal,
           )
@@ -78,13 +72,14 @@ export function useChat() {
             setTimeout(() => updateMessage(assistantId, { stage: 'generating' }), 1800),
           )
 
-          const response = await askComplete(trimmed, controller.signal)
+          const response = await askComplete(question, controller.signal)
           clearTimers()
           updateMessage(assistantId, {
             content: response.answer,
             sources: response.sources,
             graphContext: response.graphContext,
             chunksRetrieved: response.chunksRetrieved,
+            followUpQuestions: response.followUpQuestions,
             isStreaming: false,
             stage: undefined,
           })
@@ -106,7 +101,50 @@ export function useChat() {
         abortRef.current = null
       }
     },
-    [isBusy, mode, updateMessage],
+    [mode, updateMessage],
+  )
+
+  const send = useCallback(
+    async (question: string) => {
+      const trimmed = question.trim()
+      if (!trimmed || isBusy) return
+
+      const userMessage: Message = { id: makeId(), role: 'user', content: trimmed }
+      const assistantId = makeId()
+      const assistantMessage: Message = {
+        id: assistantId,
+        role: 'assistant',
+        content: '',
+        isStreaming: true,
+        stage: 'thinking',
+        sourceQuestion: trimmed,
+      }
+
+      setMessages((prev) => [...prev, userMessage, assistantMessage])
+      await runAsk(trimmed, assistantId)
+    },
+    [isBusy, runAsk],
+  )
+
+  const regenerate = useCallback(
+    async (assistantId: string) => {
+      if (isBusy) return
+      const target = messagesRef.current.find((m) => m.id === assistantId)
+      if (!target?.sourceQuestion) return
+
+      updateMessage(assistantId, {
+        content: '',
+        isStreaming: true,
+        error: false,
+        stage: 'thinking',
+        sources: undefined,
+        graphContext: undefined,
+        chunksRetrieved: undefined,
+        followUpQuestions: undefined,
+      })
+      await runAsk(target.sourceQuestion, assistantId)
+    },
+    [isBusy, runAsk, updateMessage],
   )
 
   const stop = useCallback(() => {
@@ -117,5 +155,5 @@ export function useChat() {
     setMessages([])
   }, [])
 
-  return { messages, mode, setMode, isBusy, send, stop, clear }
+  return { messages, mode, setMode, isBusy, send, stop, clear, regenerate }
 }

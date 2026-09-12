@@ -6,6 +6,8 @@ import { ResizeHandle } from './ResizeHandle'
 import { useChat } from '../hooks/useChat'
 import { useResizable } from '../hooks/useResizable'
 import { useTheme } from '../hooks/useTheme'
+import { useFontSize } from '../hooks/useFontSize'
+import { useRelationshipView } from '../hooks/useRelationshipView'
 
 const SUGGESTIONS = [
   'What does my critical illness plan cover?',
@@ -14,9 +16,11 @@ const SUGGESTIONS = [
 ]
 
 export function ChatWindow() {
-  const { messages, mode, setMode, isBusy, send, stop, clear } = useChat()
+  const { messages, mode, setMode, isBusy, send, stop, clear, regenerate } = useChat()
   const { size, isDragging, handleProps } = useResizable()
   const { theme, toggleTheme } = useTheme()
+  const { fontSize, setFontSize } = useFontSize()
+  const { relationshipView, setRelationshipView } = useRelationshipView()
   const [easyMode, setEasyMode] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -43,6 +47,10 @@ export function ChatWindow() {
         onToggleEasyMode={() => setEasyMode((v) => !v)}
         theme={theme}
         onToggleTheme={toggleTheme}
+        fontSize={fontSize}
+        onFontSizeChange={setFontSize}
+        relationshipView={relationshipView}
+        onRelationshipViewChange={setRelationshipView}
       />
 
       <div className="chat-body" ref={scrollRef}>
@@ -60,7 +68,17 @@ export function ChatWindow() {
             </div>
           </div>
         ) : (
-          messages.map((message) => <MessageBubble key={message.id} message={message} />)
+          messages.map((message, i) => (
+            <MessageBubble
+              key={message.id}
+              message={message}
+              onRegenerate={regenerate}
+              onAsk={send}
+              isBusy={isBusy}
+              isLatest={i === messages.length - 1}
+              relationshipView={relationshipView}
+            />
+          ))
         )}
       </div>
 
