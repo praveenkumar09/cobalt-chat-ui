@@ -42,6 +42,28 @@ export interface ImpactAnalysis {
   truncated: boolean
 }
 
+export interface ProgramSource {
+  programId: string
+  sourceFile: string
+  content: string
+}
+
+export interface DecisionTableRow {
+  condition: string
+  outcome: string
+  exception: string | null
+}
+
+export interface BusinessFlowEdge {
+  fromActivity: string
+  relation: string
+  toActivity: string
+}
+
+export interface BusinessFlow {
+  edges: BusinessFlowEdge[]
+}
+
 export interface Message {
   id: string
   role: Role
@@ -59,6 +81,9 @@ export interface Message {
   siblingIndex?: number
   justBranched?: boolean
   impactAnalysis?: ImpactAnalysis | null
+  businessRules?: string[]
+  decisionTable?: DecisionTableRow[]
+  businessFlow?: BusinessFlow | null
 }
 
 export interface AskResponse {
@@ -68,6 +93,9 @@ export interface AskResponse {
   chunksRetrieved: number
   followUpQuestions: string[]
   impactAnalysis: ImpactAnalysis | null
+  businessRules: string[]
+  decisionTable: DecisionTableRow[]
+  businessFlow: BusinessFlow | null
 }
 
 export type SseEvent =
@@ -84,8 +112,14 @@ export type SseEvent =
       sources: SourceCitation[]
       graphContext: GraphRelationship[]
       impactAnalysis: null
+      businessRules: string[]
+      decisionTable: DecisionTableRow[]
+      businessFlow: null
     }
   | { type: 'followups'; questions: string[] }
+  | { type: 'businessRules'; rules: string[] }
+  | { type: 'decisionTable'; rows: DecisionTableRow[] }
+  | { type: 'businessFlow'; flow: BusinessFlow }
 
 export type ResponseMode = 'stream' | 'complete'
 
@@ -97,6 +131,9 @@ export interface StoredMessagePayload {
   followUpQuestions?: string[]
   error?: boolean
   impactAnalysis?: ImpactAnalysis | null
+  businessRules?: string[]
+  decisionTable?: DecisionTableRow[]
+  businessFlow?: BusinessFlow | null
 }
 
 export interface ConversationSummary {

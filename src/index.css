@@ -23,6 +23,7 @@
   --n-file: 185, 130, 44;
   --n-job: 122, 92, 214;
   --n-entry: 211, 17, 69;
+  --n-business: 15, 148, 160;
   --edge-control: 47, 111, 214;
   --edge-data: 185, 130, 44;
   --edge-struct: 20, 22, 31;
@@ -42,6 +43,7 @@
   --n-copybook: 92, 197, 150;
   --n-file: 219, 168, 90;
   --n-job: 166, 139, 240;
+  --n-business: 70, 200, 210;
   --edge-struct: 255, 255, 255;
 }
 
@@ -1492,6 +1494,83 @@ textarea {
   padding: 0 10px 10px;
 }
 
+/* ── Business rules ───────────────────────────────────────────────────── */
+
+.rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0 10px 10px 26px;
+  list-style: none;
+}
+
+.rules-list__item {
+  position: relative;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--ink);
+  opacity: 0;
+  animation: rel-row-in 0.36s cubic-bezier(0.3, 1.2, 0.5, 1) both;
+}
+
+.rules-list__item::before {
+  content: '';
+  position: absolute;
+  left: -16px;
+  top: 7px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgb(var(--n-business));
+}
+
+/* ── Decision table ───────────────────────────────────────────────────── */
+
+.decision-table-frame {
+  padding: 0 10px 10px;
+  overflow-x: auto;
+}
+
+.decision-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.decision-table th {
+  text-align: left;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+  padding: 0 10px 6px 0;
+  border-bottom: 1px solid var(--hairline);
+  white-space: nowrap;
+}
+
+.decision-table td {
+  padding: 8px 10px 8px 0;
+  color: var(--ink);
+  vertical-align: top;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.decision-table tr {
+  opacity: 0;
+  animation: rel-row-in 0.36s cubic-bezier(0.3, 1.2, 0.5, 1) both;
+}
+
+.decision-table tr:last-child td {
+  border-bottom: none;
+}
+
+.decision-table__empty {
+  color: var(--ink-faint);
+}
+
 /* ── Key relationships: node/edge pills shared by all three layouts ──── */
 
 .node-pill {
@@ -1511,6 +1590,22 @@ textarea {
 .node-pill svg {
   color: rgb(var(--nc-rgb));
   flex-shrink: 0;
+}
+
+.node-pill--clickable {
+  font-family: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.2s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.node-pill--clickable:hover {
+  background: rgba(var(--nc-rgb), 0.18);
+}
+
+.node-pill--clickable:active {
+  transform: scale(0.94);
+  transition: transform 0.08s cubic-bezier(0.4, 0, 1, 1);
 }
 
 .edge-pill {
@@ -1963,6 +2058,211 @@ textarea {
   color: var(--ink);
   white-space: pre;
   vertical-align: top;
+}
+
+/* ── Code compare modal (current vs. proposed change) ─────────────────── */
+
+.code-compare-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  z-index: 60;
+}
+
+.code-compare-backdrop.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.code-compare-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: min(94vw, 1100px);
+  height: min(86vh, 760px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-solid);
+  border: 1px solid var(--hairline);
+  border-radius: 16px;
+  box-shadow: 0 30px 70px rgba(var(--shadow-rgb), 0.32);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0.94);
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+  z-index: 61;
+  overflow: hidden;
+}
+
+.code-compare-modal.is-open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.code-compare-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--hairline);
+  flex-shrink: 0;
+}
+
+.code-compare-modal__title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+.code-compare-modal__close {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: none;
+  background: rgba(var(--tint-rgb), 0.06);
+  color: var(--ink-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.2s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.code-compare-modal__close:hover {
+  background: rgba(var(--tint-rgb), 0.12);
+}
+
+.code-compare-modal__close:active {
+  transform: scale(0.85);
+  transition: transform 0.08s cubic-bezier(0.4, 0, 1, 1);
+}
+
+.code-compare-modal__body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.code-compare-panel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.code-compare-panel + .code-compare-panel {
+  border-left: 1px solid var(--hairline);
+}
+
+.code-compare-panel__header {
+  padding: 8px 12px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-faint);
+  background: rgba(var(--tint-rgb), 0.03);
+  border-bottom: 1px solid var(--hairline);
+  flex-shrink: 0;
+}
+
+.code-compare-panel__body {
+  flex: 1;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+.code-compare-idle,
+.code-compare-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  padding: 24px;
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+
+.code-compare-generate-btn {
+  border: none;
+  background: var(--aia-red);
+  color: #ffffff;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 9px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.2s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.code-compare-generate-btn:hover:not(:disabled) {
+  background: var(--aia-red-dark);
+}
+
+.code-compare-generate-btn:active:not(:disabled) {
+  transform: scale(0.95);
+  transition: transform 0.08s cubic-bezier(0.4, 0, 1, 1);
+}
+
+.code-compare-generate-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Row-level tint for the plain (no-language) table fallback... */
+tr.code-line-added {
+  background: rgba(21, 128, 61, 0.12);
+}
+
+tr.code-line-added .code-block__line-text {
+  color: #15803d;
+}
+
+tr.code-line-removed {
+  background: rgba(211, 17, 69, 0.1);
+}
+
+tr.code-line-removed .code-block__line-text {
+  color: var(--aia-red-dark);
+}
+
+/* ...and the syntax-highlighted branch, where each line is a wrapped <span>
+   (react-syntax-highlighter's wrapLines) rather than a table row. */
+span.code-line-added {
+  display: block;
+  background: rgba(21, 128, 61, 0.14);
+}
+
+span.code-line-removed {
+  display: block;
+  background: rgba(211, 17, 69, 0.12);
+}
+
+@media (max-width: 760px) {
+  .code-compare-modal {
+    width: 96vw;
+    height: 92vh;
+  }
+
+  .code-compare-modal__body {
+    flex-direction: column;
+  }
+
+  .code-compare-panel + .code-compare-panel {
+    border-left: none;
+    border-top: 1px solid var(--hairline);
+  }
 }
 
 /* ── Input ────────────────────────────────────────────────────────────────── */

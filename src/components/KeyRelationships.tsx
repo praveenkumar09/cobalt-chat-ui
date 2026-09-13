@@ -6,6 +6,7 @@ import type { RelationshipView } from '../hooks/useRelationshipView'
 interface KeyRelationshipsProps {
   relationships: GraphRelationship[]
   view: RelationshipView
+  label?: string
 }
 
 // These reference the CSS custom properties in index.css (--n-program etc.)
@@ -17,6 +18,7 @@ const NODE_COLOR: Record<string, string> = {
   DATABASE_FILE: 'var(--n-file)',
   JCL_JOB: 'var(--n-job)',
   ENTRY_POINT: 'var(--n-entry)',
+  BUSINESS_ACTIVITY: 'var(--n-business)',
 }
 const DEFAULT_NODE_COLOR = 'var(--tint-rgb)'
 
@@ -30,6 +32,14 @@ const EDGE_GROUP: Record<string, 'control' | 'data' | 'struct'> = {
   DELETES_FROM: 'data',
   USES_DATASET: 'data',
   COPIES: 'struct',
+  // Deterministic business-flow relation words (BusinessInsightService) —
+  // an LLM-polished phrase falls through to the default 'struct' color.
+  'leads to': 'control',
+  'uses data from': 'data',
+  updates: 'data',
+  'removes data from': 'data',
+  'shares data with': 'struct',
+  uses: 'data',
 }
 const EDGE_COLOR: Record<'control' | 'data' | 'struct', string> = {
   control: 'var(--edge-control)',
@@ -83,16 +93,50 @@ function NodeIcon({ type }: { type: string }) {
           <path d="M13 2 4 14h6l-1 8 10-13h-6z" />
         </svg>
       )
+    case 'BUSINESS_ACTIVITY':
+      return (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="3.5" y="7" width="17" height="12" rx="2" />
+          <path d="M8.5 7V5.5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2V7" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )
     default:
       return null
   }
 }
 
-export function NodePill({ label, type }: { label: string; type: string }) {
-  return (
-    <span className="node-pill" style={{ '--nc-rgb': nodeColor(type) } as CSSProperties}>
+export function NodePill({
+  label,
+  type,
+  onClick,
+}: {
+  label: string
+  type: string
+  onClick?: () => void
+}) {
+  const content = (
+    <>
       <NodeIcon type={type} />
       {label}
+    </>
+  )
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        className="node-pill node-pill--clickable"
+        style={{ '--nc-rgb': nodeColor(type) } as CSSProperties}
+        onClick={onClick}
+      >
+        {content}
+      </button>
+    )
+  }
+
+  return (
+    <span className="node-pill" style={{ '--nc-rgb': nodeColor(type) } as CSSProperties}>
+      {content}
     </span>
   )
 }
@@ -271,11 +315,11 @@ function HubView({ relationships }: { relationships: GraphRelationship[] }) {
   )
 }
 
-export function KeyRelationships({ relationships, view }: KeyRelationshipsProps) {
+export function KeyRelationships({ relationships, view, label = 'Key relationships' }: KeyRelationshipsProps) {
   if (relationships.length === 0) return null
 
   return (
-    <CollapsibleSection label="Key relationships" count={relationships.length}>
+    <CollapsibleSection label={label} count={relationships.length}>
       <div className="rel-content">
         {view === 'cards' && <CardsView relationships={relationships} />}
         {view === 'chain' && <ChainView relationships={relationships} />}

@@ -9,10 +9,24 @@ import { SiblingNav } from './SiblingNav'
 import { SourceCitations } from './SourceCitations'
 import { KeyRelationships } from './KeyRelationships'
 import { ImpactAnalysisView } from './ImpactAnalysisView'
+import { BusinessRulesView } from './BusinessRulesView'
+import { DecisionTableView } from './DecisionTableView'
 import { FollowUpSuggestions } from './FollowUpSuggestions'
-import type { Message } from '../types'
+import type { BusinessFlow, GraphRelationship, Message, ResponseMode } from '../types'
 import type { RelationshipView } from '../hooks/useRelationshipView'
 import type { ViewMode } from '../hooks/useViewMode'
+
+function toGraphRelationships(flow: BusinessFlow): GraphRelationship[] {
+  return flow.edges.map((e) => ({
+    fromId: e.fromActivity,
+    fromLabel: e.fromActivity,
+    fromType: 'BUSINESS_ACTIVITY',
+    relType: e.relation,
+    toId: e.toActivity,
+    toLabel: e.toActivity,
+    toType: 'BUSINESS_ACTIVITY',
+  }))
+}
 
 interface MessageBubbleProps {
   message: Message
@@ -24,6 +38,7 @@ interface MessageBubbleProps {
   isLatest?: boolean
   relationshipView: RelationshipView
   viewMode: ViewMode
+  responseMode: ResponseMode
 }
 
 export function MessageBubble({
@@ -36,6 +51,7 @@ export function MessageBubble({
   isLatest,
   relationshipView,
   viewMode,
+  responseMode,
 }: MessageBubbleProps) {
   const isUser = message.role === 'user'
   const showStatus = !isUser && message.isStreaming && message.content.length === 0 && message.stage
@@ -128,7 +144,28 @@ export function MessageBubble({
           !isUser &&
           !message.isStreaming &&
           !message.error &&
-          message.impactAnalysis && <ImpactAnalysisView analysis={message.impactAnalysis} />}
+          message.impactAnalysis && (
+            <ImpactAnalysisView
+              analysis={message.impactAnalysis}
+              question={message.sourceQuestion}
+              answer={message.content}
+              mode={responseMode}
+            />
+          )}
+
+        {viewMode === 'business' && !isUser && !message.isStreaming && !message.error && (
+          <>
+            {message.businessRules && <BusinessRulesView rules={message.businessRules} />}
+            {message.decisionTable && <DecisionTableView rows={message.decisionTable} />}
+            {message.businessFlow && (
+              <KeyRelationships
+                relationships={toGraphRelationships(message.businessFlow)}
+                view={relationshipView}
+                label="Business flow"
+              />
+            )}
+          </>
+        )}
 
         {showFollowups && (
           <FollowUpSuggestions questions={message.followUpQuestions!} onSelect={onAsk!} disabled={isBusy} />

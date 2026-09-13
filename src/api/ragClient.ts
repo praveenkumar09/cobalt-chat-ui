@@ -3,10 +3,13 @@ import type {
   SourceCitation,
   GraphRelationship,
   ImpactAnalysis,
+  DecisionTableRow,
+  BusinessFlow,
   SseEvent,
   ConversationListResponse,
   ConversationDetail,
   StoredMessagePayload,
+  ProgramSource,
   Role,
 } from '../types'
 import { getSessionToken } from '../utils/session'
@@ -88,6 +91,93 @@ export async function deleteConversation(id: string): Promise<void> {
   }
 }
 
+/** The program's real, ingested source (never fabricated) — 404 if none exists. */
+export async function fetchProgramSource(programId: string, signal?: AbortSignal): Promise<ProgramSource> {
+  const res = await fetch(`${BASE_URL}/api/programs/${encodeURIComponent(programId)}/source`, { signal })
+  if (!res.ok) {
+    throw new RagApiError(`Request failed with status ${res.status}`)
+  }
+  return (await res.json()) as ProgramSource
+}
+
+/** LLM-generated proposed modification to the program, grounded in its real current source. */
+export async function proposeChange(
+  programId: string,
+  question: string,
+  answer: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const res = await fetch(`${BASE_URL}/api/programs/${encodeURIComponent(programId)}/propose-change`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question, answer }),
+    signal,
+  })
+  if (!res.ok) {
+    throw new RagApiError(`Request failed with status ${res.status}`)
+  }
+  const data = (await res.json()) as { proposedSource: string }
+  return data.proposedSource
+}
+
+interface ProposeChangeStreamHandlers {
+  onToken: (content: string) => void
+  onError?: () => void
+}
+
+/** Streaming variant of {@link proposeChange} — used when the user's Live/Full
+ * response-mode setting is "Live", same SSE shape as {@link askStream}. */
+export async function proposeChangeStream(
+  programId: string,
+  question: string,
+  answer: string,
+  handlers: ProposeChangeStreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/programs/${encodeURIComponent(programId)}/propose-change/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+    body: JSON.stringify({ question, answer }),
+    signal,
+  })
+
+  if (!res.ok || !res.body) {
+    throw new RagApiError(`Streaming request failed with status ${res.status}`)
+  }
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const events = buffer.split('\n\n')
+    buffer = events.pop() ?? ''
+
+    for (const rawEvent of events) {
+      const dataLines = rawEvent.split('\n').filter((line) => line.startsWith('data:'))
+      if (dataLines.length === 0) continue
+
+      const payload = dataLines.map((line) => line.slice(5).trimStart()).join('\n')
+      if (payload === '[DONE]') return
+
+      try {
+        const parsed = JSON.parse(payload) as { type: string; content?: string }
+        if (parsed.type === 'token' && parsed.content) {
+          handlers.onToken(parsed.content)
+        } else if (parsed.type === 'error') {
+          handlers.onError?.()
+        }
+      } catch {
+        // Ignore partial/malformed SSE frames — the buffer will complete on the next chunk.
+      }
+    }
+  }
+}
+
 export async function fetchSuggestions(signal?: AbortSignal): Promise<string[]> {
   const res = await fetch(`${BASE_URL}/api/suggestions`, { signal })
   if (!res.ok) {
@@ -118,8 +208,18 @@ interface StreamHandlers {
     impactAnalysis?: ImpactAnalysis
   }) => void
   onToken: (content: string) => void
-  onCorrection?: (sources: SourceCitation[], graphContext: GraphRelationship[], impactAnalysis: null) => void
+  onCorrection?: (
+    sources: SourceCitation[],
+    graphContext: GraphRelationship[],
+    impactAnalysis: null,
+    businessRules: string[],
+    decisionTable: DecisionTableRow[],
+    businessFlow: null,
+  ) => void
   onFollowups?: (questions: string[]) => void
+  onBusinessRules?: (rules: string[]) => void
+  onDecisionTable?: (rows: DecisionTableRow[]) => void
+  onBusinessFlow?: (flow: BusinessFlow) => void
 }
 
 export async function askStream(question: string, handlers: StreamHandlers, signal?: AbortSignal): Promise<void> {
@@ -160,9 +260,22 @@ export async function askStream(question: string, handlers: StreamHandlers, sign
         } else if (parsed.type === 'token') {
           handlers.onToken(parsed.content)
         } else if (parsed.type === 'correction') {
-          handlers.onCorrection?.(parsed.sources, parsed.graphContext, parsed.impactAnalysis)
+          handlers.onCorrection?.(
+            parsed.sources,
+            parsed.graphContext,
+            parsed.impactAnalysis,
+            parsed.businessRules,
+            parsed.decisionTable,
+            parsed.businessFlow,
+          )
         } else if (parsed.type === 'followups') {
           handlers.onFollowups?.(parsed.questions)
+        } else if (parsed.type === 'businessRules') {
+          handlers.onBusinessRules?.(parsed.rules)
+        } else if (parsed.type === 'decisionTable') {
+          handlers.onDecisionTable?.(parsed.rows)
+        } else if (parsed.type === 'businessFlow') {
+          handlers.onBusinessFlow?.(parsed.flow)
         }
       } catch {
         // Ignore partial/malformed SSE frames — the buffer will complete on the next chunk.

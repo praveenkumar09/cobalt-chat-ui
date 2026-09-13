@@ -11,23 +11,40 @@ const PREVIEW_LINES = 12
 const LINE_HEIGHT_PX = 19
 
 export type CodeLanguage = 'cobol' | null
+export type DiffLineKind = 'same' | 'added' | 'removed'
 
 interface CodeBlockProps {
   code: string
   language: CodeLanguage
   startLine?: number
   downloadName: string
+  /** Set false for a full-file view (compare modal) where truncation doesn't apply. */
+  collapsible?: boolean
+  /** Per-line diff annotation (index 0 = startLine) — tints added/removed lines. */
+  lineKinds?: DiffLineKind[]
 }
 
-export function CodeBlock({ code, language, startLine = 1, downloadName }: CodeBlockProps) {
+export function CodeBlock({
+  code,
+  language,
+  startLine = 1,
+  downloadName,
+  collapsible: collapsibleProp = true,
+  lineKinds,
+}: CodeBlockProps) {
   const theme = useDomTheme()
   const [expanded, setExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
 
   const trimmed = useMemo(() => code.replace(/\n+$/, ''), [code])
   const lines = useMemo(() => trimmed.split('\n'), [trimmed])
-  const collapsible = lines.length > PREVIEW_LINES
+  const collapsible = collapsibleProp && lines.length > PREVIEW_LINES
   const isCollapsed = collapsible && !expanded
+
+  const lineClassName = (lineNumber: number): string | undefined => {
+    const kind = lineKinds?.[lineNumber - startLine]
+    return kind && kind !== 'same' ? `code-line-${kind}` : undefined
+  }
 
   const copy = async () => {
     try {
@@ -106,6 +123,11 @@ export function CodeBlock({ code, language, startLine = 1, downloadName }: CodeB
             showLineNumbers
             startingLineNumber={startLine}
             wrapLongLines={false}
+            wrapLines={!!lineKinds}
+            lineProps={lineKinds ? (lineNumber: number) => {
+              const className = lineClassName(lineNumber)
+              return className ? { className } : {}
+            } : undefined}
             customStyle={{
               margin: 0,
               padding: '10px 12px',
@@ -127,7 +149,7 @@ export function CodeBlock({ code, language, startLine = 1, downloadName }: CodeB
           <table className="code-block__plain">
             <tbody>
               {lines.map((line, i) => (
-                <tr key={i}>
+                <tr key={i} className={lineClassName(startLine + i)}>
                   <td className="code-block__gutter">{startLine + i}</td>
                   <td className="code-block__line-text">{line.length ? line : ' '}</td>
                 </tr>

@@ -11,6 +11,8 @@ import { playReceiveSound } from '../utils/sound'
 import type {
   ConversationDetail,
   ImpactAnalysis,
+  DecisionTableRow,
+  BusinessFlow,
   Message,
   ResponseMode,
   SourceCitation,
@@ -33,6 +35,9 @@ function toMessages(detail: ConversationDetail): Message[] {
       followUpQuestions: m.payload?.followUpQuestions,
       error: m.payload?.error,
       impactAnalysis: m.payload?.impactAnalysis,
+      businessRules: m.payload?.businessRules,
+      decisionTable: m.payload?.decisionTable,
+      businessFlow: m.payload?.businessFlow,
       parentId: m.parentId,
       siblingIds: m.siblingIds,
       siblingIndex: m.siblingIndex,
@@ -80,6 +85,9 @@ export function useChat() {
       let finalGraphContext: GraphRelationship[] | undefined
       let finalFollowUps: string[] | undefined
       let finalImpactAnalysis: ImpactAnalysis | null | undefined
+      let finalBusinessRules: string[] | undefined
+      let finalDecisionTable: DecisionTableRow[] | undefined
+      let finalBusinessFlow: BusinessFlow | null | undefined
       let finalError = false
 
       try {
@@ -110,15 +118,37 @@ export function useChat() {
                 finalContent = accumulated
                 updateMessage(assistantId, { content: accumulated, stage: undefined })
               },
-              onCorrection: (sources, graphContext, impactAnalysis) => {
+              onCorrection: (sources, graphContext, impactAnalysis, businessRules, decisionTable, businessFlow) => {
                 finalSources = sources
                 finalGraphContext = graphContext
                 finalImpactAnalysis = impactAnalysis
-                updateMessage(assistantId, { sources, graphContext, impactAnalysis })
+                finalBusinessRules = businessRules
+                finalDecisionTable = decisionTable
+                finalBusinessFlow = businessFlow
+                updateMessage(assistantId, {
+                  sources,
+                  graphContext,
+                  impactAnalysis,
+                  businessRules,
+                  decisionTable,
+                  businessFlow,
+                })
               },
               onFollowups: (followUpQuestions) => {
                 finalFollowUps = followUpQuestions
                 updateMessage(assistantId, { followUpQuestions })
+              },
+              onBusinessRules: (rules) => {
+                finalBusinessRules = rules
+                updateMessage(assistantId, { businessRules: rules })
+              },
+              onDecisionTable: (rows) => {
+                finalDecisionTable = rows
+                updateMessage(assistantId, { decisionTable: rows })
+              },
+              onBusinessFlow: (flow) => {
+                finalBusinessFlow = flow
+                updateMessage(assistantId, { businessFlow: flow })
               },
             },
             controller.signal,
@@ -138,6 +168,9 @@ export function useChat() {
           finalGraphContext = response.graphContext
           finalFollowUps = response.followUpQuestions
           finalImpactAnalysis = response.impactAnalysis
+          finalBusinessRules = response.businessRules
+          finalDecisionTable = response.decisionTable
+          finalBusinessFlow = response.businessFlow
           updateMessage(assistantId, {
             content: response.answer,
             sources: response.sources,
@@ -145,6 +178,9 @@ export function useChat() {
             chunksRetrieved: response.chunksRetrieved,
             followUpQuestions: response.followUpQuestions,
             impactAnalysis: response.impactAnalysis,
+            businessRules: response.businessRules,
+            decisionTable: response.decisionTable,
+            businessFlow: response.businessFlow,
             isStreaming: false,
             stage: undefined,
           })
@@ -174,6 +210,9 @@ export function useChat() {
         followUpQuestions: finalFollowUps,
         error: finalError || undefined,
         impactAnalysis: finalImpactAnalysis,
+        businessRules: finalBusinessRules,
+        decisionTable: finalDecisionTable,
+        businessFlow: finalBusinessFlow,
       }
       // Awaited so callers that need to re-sync with the server afterward (e.g.
       // branchFrom, to pick up sibling metadata) know the message has actually landed.
@@ -292,6 +331,9 @@ export function useChat() {
         chunksRetrieved: undefined,
         followUpQuestions: undefined,
         impactAnalysis: undefined,
+        businessRules: undefined,
+        decisionTable: undefined,
+        businessFlow: undefined,
       })
       await runAsk(target.sourceQuestion, assistantId, target.parentId ?? null)
     },

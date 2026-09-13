@@ -164,6 +164,7 @@ export function ChatWindow({ session, onLogout }: ChatWindowProps) {
               isLatest={i === messages.length - 1}
               relationshipView={relationshipView}
               viewMode={viewMode}
+              responseMode={mode}
             />
           ))
         )}
