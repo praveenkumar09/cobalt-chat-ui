@@ -35,18 +35,16 @@ const RELATIONSHIP_VIEW_LABEL: Record<RelationshipView, string> = {
   hub: 'Hub',
 }
 
-const VIEW_MODE_ORDER: ViewMode[] = ['tech', 'business', 'impact']
+const VIEW_MODE_ORDER: ViewMode[] = ['tech', 'business']
 
 const VIEW_MODE_LABEL: Record<ViewMode, string> = {
   tech: 'Tech',
   business: 'Business',
-  impact: 'Impact',
 }
 
 const VIEW_MODE_TITLE: Record<ViewMode, string> = {
-  tech: 'Show everything — citations, relationships, branching',
-  business: 'Hide citations, key relationships, and branching',
-  impact: 'Tech view, plus impact analysis for change requests',
+  tech: 'Show everything — citations, relationships, branching, impact analysis for change requests',
+  business: 'Business rules, decision table, data dictionary, and business flow — no technical details',
 }
 
 const FONT_SIZE_LABEL: Record<FontSize, string> = {

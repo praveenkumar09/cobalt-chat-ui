@@ -1,11 +1,13 @@
 import { CollapsibleSection } from './CollapsibleSection'
+import { ReferenceButton } from './ReferenceButton'
 import type { DecisionTableRow } from '../types'
 
 interface DecisionTableViewProps {
   rows: DecisionTableRow[]
+  onOpenReference: (chunkId: string) => void
 }
 
-export function DecisionTableView({ rows }: DecisionTableViewProps) {
+export function DecisionTableView({ rows, onOpenReference }: DecisionTableViewProps) {
   if (rows.length === 0) return null
 
   return (
@@ -17,6 +19,7 @@ export function DecisionTableView({ rows }: DecisionTableViewProps) {
               <th>Condition</th>
               <th>Business Outcome</th>
               <th>Exception</th>
+              <th className="decision-table__ref-col" />
             </tr>
           </thead>
           <tbody>
@@ -26,6 +29,9 @@ export function DecisionTableView({ rows }: DecisionTableViewProps) {
                 <td>{row.outcome}</td>
                 <td className={row.exception ? undefined : 'decision-table__empty'}>
                   {row.exception || '—'}
+                </td>
+                <td className="decision-table__ref-col">
+                  {row.chunkId && <ReferenceButton onClick={() => onOpenReference(row.chunkId!)} />}
                 </td>
               </tr>
             ))}

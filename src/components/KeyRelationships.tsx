@@ -7,6 +7,10 @@ interface KeyRelationshipsProps {
   relationships: GraphRelationship[]
   view: RelationshipView
   label?: string
+  /** Opens the real source for a node (Tech view only — Business Flow's
+   * synthetic activity nodes have no real program to fetch, so this is
+   * simply omitted there). */
+  onNodeClick?: (id: string, type: string) => void
 }
 
 // These reference the CSS custom properties in index.css (--n-program etc.)
@@ -109,10 +113,12 @@ export function NodePill({
   label,
   type,
   onClick,
+  style,
 }: {
   label: string
   type: string
   onClick?: () => void
+  style?: CSSProperties
 }) {
   const content = (
     <>
@@ -120,22 +126,18 @@ export function NodePill({
       {label}
     </>
   )
+  const mergedStyle = { '--nc-rgb': nodeColor(type), ...style } as CSSProperties
 
   if (onClick) {
     return (
-      <button
-        type="button"
-        className="node-pill node-pill--clickable"
-        style={{ '--nc-rgb': nodeColor(type) } as CSSProperties}
-        onClick={onClick}
-      >
+      <button type="button" className="node-pill node-pill--clickable" style={mergedStyle} onClick={onClick}>
         {content}
       </button>
     )
   }
 
   return (
-    <span className="node-pill" style={{ '--nc-rgb': nodeColor(type) } as CSSProperties}>
+    <span className="node-pill" style={mergedStyle}>
       {content}
     </span>
   )
@@ -158,16 +160,30 @@ function ArrowIcon() {
 }
 
 // ── Cards: one row per relationship, always correct regardless of shape ──
-function CardsView({ relationships }: { relationships: GraphRelationship[] }) {
+function CardsView({
+  relationships,
+  onNodeClick,
+}: {
+  relationships: GraphRelationship[]
+  onNodeClick?: (id: string, type: string) => void
+}) {
   return (
     <>
       {relationships.map((r, i) => (
         <div className="rel-row" key={`${r.fromId}-${r.relType}-${r.toId}-${i}`} style={{ animationDelay: `${i * 55}ms` }}>
-          <NodePill label={r.fromId} type={r.fromType} />
+          <NodePill
+            label={r.fromId}
+            type={r.fromType}
+            onClick={onNodeClick ? () => onNodeClick(r.fromId, r.fromType) : undefined}
+          />
           <ArrowIcon />
           <EdgePill rel={r.relType} />
           <ArrowIcon />
-          <NodePill label={r.toId} type={r.toType} />
+          <NodePill
+            label={r.toId}
+            type={r.toType}
+            onClick={onNodeClick ? () => onNodeClick(r.toId, r.toType) : undefined}
+          />
         </div>
       ))}
     </>
@@ -176,7 +192,13 @@ function CardsView({ relationships }: { relationships: GraphRelationship[] }) {
 
 // ── Chain: walk the relationships, merging consecutive matching endpoints
 // into one flowing sequence; starts a new segment when the path breaks. ──
-function ChainView({ relationships }: { relationships: GraphRelationship[] }) {
+function ChainView({
+  relationships,
+  onNodeClick,
+}: {
+  relationships: GraphRelationship[]
+  onNodeClick?: (id: string, type: string) => void
+}) {
   type Step = { kind: 'node'; label: string; type: string } | { kind: 'edge'; rel: string }
   const steps: Step[] = []
 
@@ -195,14 +217,13 @@ function ChainView({ relationships }: { relationships: GraphRelationship[] }) {
     <div className="chain">
       {steps.map((step, i) =>
         step.kind === 'node' ? (
-          <span
+          <NodePill
             key={i}
-            className="node-pill"
-            style={{ '--nc-rgb': nodeColor(step.type), animationDelay: `${i * 90}ms` } as CSSProperties}
-          >
-            <NodeIcon type={step.type} />
-            {step.label}
-          </span>
+            label={step.label}
+            type={step.type}
+            onClick={onNodeClick ? () => onNodeClick(step.label, step.type) : undefined}
+            style={{ animationDelay: `${i * 90}ms` }}
+          />
         ) : (
           <div className="connector" key={i} style={{ animationDelay: `${i * 90}ms` }}>
             <ArrowIcon />
@@ -216,7 +237,13 @@ function ChainView({ relationships }: { relationships: GraphRelationship[] }) {
 
 // ── Hub: the most-connected node becomes the center; its direct
 // relationships radiate out as evenly-spaced spokes. ──
-function HubView({ relationships }: { relationships: GraphRelationship[] }) {
+function HubView({
+  relationships,
+  onNodeClick,
+}: {
+  relationships: GraphRelationship[]
+  onNodeClick?: (id: string, type: string) => void
+}) {
   const degree = new Map<string, number>()
   const typeOf = new Map<string, string>()
   relationships.forEach((r) => {
@@ -289,7 +316,11 @@ function HubView({ relationships }: { relationships: GraphRelationship[] }) {
       </svg>
 
       <div className="hub-node is-center" style={{ left: '50%', top: '50%' }}>
-        <NodePill label={centerLabel} type={centerType} />
+        <NodePill
+          label={centerLabel}
+          type={centerType}
+          onClick={onNodeClick ? () => onNodeClick(centerLabel, centerType) : undefined}
+        />
       </div>
 
       {spokes.map((s, i) => (
@@ -298,7 +329,7 @@ function HubView({ relationships }: { relationships: GraphRelationship[] }) {
           className="hub-node"
           style={{ left: `${s.x}%`, top: `${s.y}%`, animationDelay: `${140 + i * 70}ms` }}
         >
-          <NodePill label={s.label} type={s.type} />
+          <NodePill label={s.label} type={s.type} onClick={onNodeClick ? () => onNodeClick(s.label, s.type) : undefined} />
         </div>
       ))}
 
@@ -315,15 +346,20 @@ function HubView({ relationships }: { relationships: GraphRelationship[] }) {
   )
 }
 
-export function KeyRelationships({ relationships, view, label = 'Key relationships' }: KeyRelationshipsProps) {
+export function KeyRelationships({
+  relationships,
+  view,
+  label = 'Key relationships',
+  onNodeClick,
+}: KeyRelationshipsProps) {
   if (relationships.length === 0) return null
 
   return (
     <CollapsibleSection label={label} count={relationships.length}>
       <div className="rel-content">
-        {view === 'cards' && <CardsView relationships={relationships} />}
-        {view === 'chain' && <ChainView relationships={relationships} />}
-        {view === 'hub' && <HubView relationships={relationships} />}
+        {view === 'cards' && <CardsView relationships={relationships} onNodeClick={onNodeClick} />}
+        {view === 'chain' && <ChainView relationships={relationships} onNodeClick={onNodeClick} />}
+        {view === 'hub' && <HubView relationships={relationships} onNodeClick={onNodeClick} />}
       </div>
     </CollapsibleSection>
   )

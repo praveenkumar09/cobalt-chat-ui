@@ -11,8 +11,11 @@ import { playReceiveSound } from '../utils/sound'
 import type {
   ConversationDetail,
   ImpactAnalysis,
+  BusinessRule,
   DecisionTableRow,
   BusinessFlow,
+  DataDictionaryEntry,
+  TechnicalRule,
   Message,
   ResponseMode,
   SourceCitation,
@@ -38,6 +41,8 @@ function toMessages(detail: ConversationDetail): Message[] {
       businessRules: m.payload?.businessRules,
       decisionTable: m.payload?.decisionTable,
       businessFlow: m.payload?.businessFlow,
+      dataDictionary: m.payload?.dataDictionary,
+      technicalRules: m.payload?.technicalRules,
       parentId: m.parentId,
       siblingIds: m.siblingIds,
       siblingIndex: m.siblingIndex,
@@ -85,9 +90,11 @@ export function useChat() {
       let finalGraphContext: GraphRelationship[] | undefined
       let finalFollowUps: string[] | undefined
       let finalImpactAnalysis: ImpactAnalysis | null | undefined
-      let finalBusinessRules: string[] | undefined
+      let finalBusinessRules: BusinessRule[] | undefined
       let finalDecisionTable: DecisionTableRow[] | undefined
       let finalBusinessFlow: BusinessFlow | null | undefined
+      let finalDataDictionary: DataDictionaryEntry[] | undefined
+      let finalTechnicalRules: TechnicalRule[] | undefined
       let finalError = false
 
       try {
@@ -104,13 +111,11 @@ export function useChat() {
                 clearTimers()
                 finalSources = meta.sources
                 finalGraphContext = meta.graphContext
-                finalImpactAnalysis = meta.impactAnalysis ?? null
                 updateMessage(assistantId, {
                   stage: 'generating',
                   sources: meta.sources,
                   graphContext: meta.graphContext,
                   chunksRetrieved: meta.chunksRetrieved,
-                  impactAnalysis: meta.impactAnalysis ?? null,
                 })
               },
               onToken: (token) => {
@@ -118,13 +123,24 @@ export function useChat() {
                 finalContent = accumulated
                 updateMessage(assistantId, { content: accumulated, stage: undefined })
               },
-              onCorrection: (sources, graphContext, impactAnalysis, businessRules, decisionTable, businessFlow) => {
+              onCorrection: (
+                sources,
+                graphContext,
+                impactAnalysis,
+                businessRules,
+                decisionTable,
+                businessFlow,
+                dataDictionary,
+                technicalRules,
+              ) => {
                 finalSources = sources
                 finalGraphContext = graphContext
                 finalImpactAnalysis = impactAnalysis
                 finalBusinessRules = businessRules
                 finalDecisionTable = decisionTable
                 finalBusinessFlow = businessFlow
+                finalDataDictionary = dataDictionary
+                finalTechnicalRules = technicalRules
                 updateMessage(assistantId, {
                   sources,
                   graphContext,
@@ -132,6 +148,8 @@ export function useChat() {
                   businessRules,
                   decisionTable,
                   businessFlow,
+                  dataDictionary,
+                  technicalRules,
                 })
               },
               onFollowups: (followUpQuestions) => {
@@ -149,6 +167,18 @@ export function useChat() {
               onBusinessFlow: (flow) => {
                 finalBusinessFlow = flow
                 updateMessage(assistantId, { businessFlow: flow })
+              },
+              onDataDictionary: (entries) => {
+                finalDataDictionary = entries
+                updateMessage(assistantId, { dataDictionary: entries })
+              },
+              onTechnicalRules: (rules) => {
+                finalTechnicalRules = rules
+                updateMessage(assistantId, { technicalRules: rules })
+              },
+              onImpactAnalysis: (analysis) => {
+                finalImpactAnalysis = analysis
+                updateMessage(assistantId, { impactAnalysis: analysis })
               },
             },
             controller.signal,
@@ -171,6 +201,8 @@ export function useChat() {
           finalBusinessRules = response.businessRules
           finalDecisionTable = response.decisionTable
           finalBusinessFlow = response.businessFlow
+          finalDataDictionary = response.dataDictionary
+          finalTechnicalRules = response.technicalRules
           updateMessage(assistantId, {
             content: response.answer,
             sources: response.sources,
@@ -181,6 +213,8 @@ export function useChat() {
             businessRules: response.businessRules,
             decisionTable: response.decisionTable,
             businessFlow: response.businessFlow,
+            dataDictionary: response.dataDictionary,
+            technicalRules: response.technicalRules,
             isStreaming: false,
             stage: undefined,
           })
@@ -213,6 +247,8 @@ export function useChat() {
         businessRules: finalBusinessRules,
         decisionTable: finalDecisionTable,
         businessFlow: finalBusinessFlow,
+        dataDictionary: finalDataDictionary,
+        technicalRules: finalTechnicalRules,
       }
       // Awaited so callers that need to re-sync with the server afterward (e.g.
       // branchFrom, to pick up sibling metadata) know the message has actually landed.
@@ -334,6 +370,8 @@ export function useChat() {
         businessRules: undefined,
         decisionTable: undefined,
         businessFlow: undefined,
+        dataDictionary: undefined,
+        technicalRules: undefined,
       })
       await runAsk(target.sourceQuestion, assistantId, target.parentId ?? null)
     },

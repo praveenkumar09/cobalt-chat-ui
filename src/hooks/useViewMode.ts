@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
 
-export type ViewMode = 'tech' | 'business' | 'impact'
+export type ViewMode = 'tech' | 'business'
 
 const STORAGE_KEY = 'aia-orbit-view-mode'
 
 function getInitialViewMode(): ViewMode {
   if (typeof window === 'undefined') return 'tech'
   const stored = window.localStorage.getItem(STORAGE_KEY)
-  return stored === 'tech' || stored === 'business' || stored === 'impact' ? stored : 'tech'
+  // A previously-stored 'impact' (from the old three-view system, now merged
+  // into Tech) falls through to the 'tech' default here automatically.
+  return stored === 'tech' || stored === 'business' ? stored : 'tech'
 }
 
 export function useViewMode() {

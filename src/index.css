@@ -760,6 +760,10 @@ textarea {
   gap: 7px;
 }
 
+.section-loading {
+  margin-top: 8px;
+}
+
 .status-shimmer__dot {
   width: 7px;
   height: 7px;
@@ -1507,6 +1511,10 @@ textarea {
 
 .rules-list__item {
   position: relative;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
   font-size: 0.78rem;
   line-height: 1.5;
   color: var(--ink);
@@ -1523,6 +1531,15 @@ textarea {
   height: 6px;
   border-radius: 50%;
   background: rgb(var(--n-business));
+}
+
+.rules-list__item--technical::before {
+  background: rgb(var(--n-program));
+}
+
+.rules-list__item--technical span {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.72rem;
 }
 
 /* ── Decision table ───────────────────────────────────────────────────── */
@@ -1569,6 +1586,48 @@ textarea {
 
 .decision-table__empty {
   color: var(--ink-faint);
+}
+
+.data-dictionary__technical {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.decision-table__ref-col {
+  width: 1%;
+  padding-right: 0;
+  white-space: nowrap;
+}
+
+/* ── Reference button (rules / decision table → cited code chunk) ──────── */
+
+.reference-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--hairline);
+  background: rgba(var(--n-business), 0.08);
+  color: rgb(var(--n-business));
+  font: inherit;
+  font-size: 0.64rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.2s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.reference-btn:hover {
+  background: rgba(var(--n-business), 0.16);
+}
+
+.reference-btn:active {
+  transform: scale(0.92);
+  transition: transform 0.08s cubic-bezier(0.4, 0, 1, 1);
 }
 
 /* ── Key relationships: node/edge pills shared by all three layouts ──── */
@@ -2095,6 +2154,16 @@ textarea {
   transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
   z-index: 61;
   overflow: hidden;
+}
+
+.code-compare-modal--single {
+  width: min(90vw, 800px);
+  height: min(80vh, 640px);
+}
+
+.code-reference-modal__body {
+  flex: 1;
+  min-height: 0;
 }
 
 .code-compare-modal.is-open {

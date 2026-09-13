@@ -48,10 +48,28 @@ export interface ProgramSource {
   content: string
 }
 
+export interface BusinessRule {
+  rule: string
+  chunkId: string | null
+}
+
+export interface TechnicalRule {
+  rule: string
+  chunkId: string | null
+}
+
 export interface DecisionTableRow {
   condition: string
   outcome: string
   exception: string | null
+  chunkId: string | null
+}
+
+export interface DataDictionaryEntry {
+  term: string
+  technicalName: string | null
+  description: string
+  chunkId: string | null
 }
 
 export interface BusinessFlowEdge {
@@ -81,9 +99,11 @@ export interface Message {
   siblingIndex?: number
   justBranched?: boolean
   impactAnalysis?: ImpactAnalysis | null
-  businessRules?: string[]
+  businessRules?: BusinessRule[]
   decisionTable?: DecisionTableRow[]
   businessFlow?: BusinessFlow | null
+  dataDictionary?: DataDictionaryEntry[]
+  technicalRules?: TechnicalRule[]
 }
 
 export interface AskResponse {
@@ -93,9 +113,11 @@ export interface AskResponse {
   chunksRetrieved: number
   followUpQuestions: string[]
   impactAnalysis: ImpactAnalysis | null
-  businessRules: string[]
+  businessRules: BusinessRule[]
   decisionTable: DecisionTableRow[]
   businessFlow: BusinessFlow | null
+  dataDictionary: DataDictionaryEntry[]
+  technicalRules: TechnicalRule[]
 }
 
 export type SseEvent =
@@ -104,7 +126,6 @@ export type SseEvent =
       sources: SourceCitation[]
       graphContext: GraphRelationship[]
       chunksRetrieved: number
-      impactAnalysis?: ImpactAnalysis
     }
   | { type: 'token'; content: string }
   | {
@@ -112,14 +133,19 @@ export type SseEvent =
       sources: SourceCitation[]
       graphContext: GraphRelationship[]
       impactAnalysis: null
-      businessRules: string[]
+      businessRules: BusinessRule[]
       decisionTable: DecisionTableRow[]
       businessFlow: null
+      dataDictionary: DataDictionaryEntry[]
+      technicalRules: TechnicalRule[]
     }
   | { type: 'followups'; questions: string[] }
-  | { type: 'businessRules'; rules: string[] }
+  | { type: 'businessRules'; rules: BusinessRule[] }
   | { type: 'decisionTable'; rows: DecisionTableRow[] }
   | { type: 'businessFlow'; flow: BusinessFlow }
+  | { type: 'dataDictionary'; entries: DataDictionaryEntry[] }
+  | { type: 'technicalRules'; rules: TechnicalRule[] }
+  | { type: 'impactAnalysis'; analysis: ImpactAnalysis }
 
 export type ResponseMode = 'stream' | 'complete'
 
@@ -131,9 +157,11 @@ export interface StoredMessagePayload {
   followUpQuestions?: string[]
   error?: boolean
   impactAnalysis?: ImpactAnalysis | null
-  businessRules?: string[]
+  businessRules?: BusinessRule[]
   decisionTable?: DecisionTableRow[]
   businessFlow?: BusinessFlow | null
+  dataDictionary?: DataDictionaryEntry[]
+  technicalRules?: TechnicalRule[]
 }
 
 export interface ConversationSummary {

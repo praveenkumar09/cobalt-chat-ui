@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { AiaLogo } from './AiaLogo'
 import { StatusShimmer } from './StatusShimmer'
 import { HeartButton } from './HeartButton'
@@ -10,8 +11,12 @@ import { SourceCitations } from './SourceCitations'
 import { KeyRelationships } from './KeyRelationships'
 import { ImpactAnalysisView } from './ImpactAnalysisView'
 import { BusinessRulesView } from './BusinessRulesView'
+import { TechnicalRulesView } from './TechnicalRulesView'
 import { DecisionTableView } from './DecisionTableView'
+import { DataDictionaryView } from './DataDictionaryView'
+import { CodeReferenceModal } from './CodeReferenceModal'
 import { FollowUpSuggestions } from './FollowUpSuggestions'
+import { SectionLoading } from './SectionLoading'
 import type { BusinessFlow, GraphRelationship, Message, ResponseMode } from '../types'
 import type { RelationshipView } from '../hooks/useRelationshipView'
 import type { ViewMode } from '../hooks/useViewMode'
@@ -53,11 +58,31 @@ export function MessageBubble({
   viewMode,
   responseMode,
 }: MessageBubbleProps) {
+  const [openRefChunkId, setOpenRefChunkId] = useState<string | null>(null)
+  const [openRefProgramId, setOpenRefProgramId] = useState<string | null>(null)
+  const openRefCitation = message.sources?.find((s) => s.chunkId === openRefChunkId) ?? null
+
+  const openReference = (chunkId: string) => {
+    setOpenRefProgramId(null)
+    setOpenRefChunkId(chunkId)
+  }
+  const openNodeSource = (id: string) => {
+    setOpenRefChunkId(null)
+    setOpenRefProgramId(id)
+  }
+  const closeReference = () => {
+    setOpenRefChunkId(null)
+    setOpenRefProgramId(null)
+  }
+
   const isUser = message.role === 'user'
   const showStatus = !isUser && message.isStreaming && message.content.length === 0 && message.stage
   const showActions = !isUser && !message.isStreaming && !message.error && message.content.length > 0
   const showRetry = !isUser && !message.isStreaming && !!message.error && !!message.sourceQuestion
   const showDeveloperExtras = viewMode !== 'business'
+  // Still working on a below-the-chat section: answer text has started, the
+  // stream hasn't fully finished, and this particular field hasn't landed yet.
+  const stillFilling = !isUser && !message.error && message.isStreaming && message.content.length > 0
   const showFollowups =
     isLatest &&
     !isUser &&
@@ -124,45 +149,68 @@ export function MessageBubble({
           </div>
         )}
 
+        {showDeveloperExtras && !isUser && !message.error && (
+          <>
+            {message.technicalRules ? (
+              <TechnicalRulesView rules={message.technicalRules} onOpenReference={openReference} />
+            ) : (
+              stillFilling && <SectionLoading label="Extracting technical rules" />
+            )}
+          </>
+        )}
+
         {showDeveloperExtras &&
           !isUser &&
-          !message.isStreaming &&
           !message.error &&
           message.sources &&
           message.sources.length > 0 && <SourceCitations sources={message.sources} />}
 
         {showDeveloperExtras &&
           !isUser &&
-          !message.isStreaming &&
           !message.error &&
           message.graphContext &&
           message.graphContext.length > 0 && (
-            <KeyRelationships relationships={message.graphContext} view={relationshipView} />
-          )}
-
-        {viewMode === 'impact' &&
-          !isUser &&
-          !message.isStreaming &&
-          !message.error &&
-          message.impactAnalysis && (
-            <ImpactAnalysisView
-              analysis={message.impactAnalysis}
-              question={message.sourceQuestion}
-              answer={message.content}
-              mode={responseMode}
+            <KeyRelationships
+              relationships={message.graphContext}
+              view={relationshipView}
+              onNodeClick={openNodeSource}
             />
           )}
 
-        {viewMode === 'business' && !isUser && !message.isStreaming && !message.error && (
+        {viewMode === 'tech' && !isUser && !message.error && message.impactAnalysis && (
+          <ImpactAnalysisView
+            analysis={message.impactAnalysis}
+            question={message.sourceQuestion}
+            answer={message.content}
+            mode={responseMode}
+          />
+        )}
+
+        {viewMode === 'business' && !isUser && !message.error && (
           <>
-            {message.businessRules && <BusinessRulesView rules={message.businessRules} />}
-            {message.decisionTable && <DecisionTableView rows={message.decisionTable} />}
-            {message.businessFlow && (
+            {message.businessRules ? (
+              <BusinessRulesView rules={message.businessRules} onOpenReference={openReference} />
+            ) : (
+              stillFilling && <SectionLoading label="Extracting business rules" />
+            )}
+            {message.decisionTable ? (
+              <DecisionTableView rows={message.decisionTable} onOpenReference={openReference} />
+            ) : (
+              stillFilling && <SectionLoading label="Building decision table" />
+            )}
+            {message.dataDictionary ? (
+              <DataDictionaryView entries={message.dataDictionary} onOpenReference={openReference} />
+            ) : (
+              stillFilling && <SectionLoading label="Extracting data dictionary" />
+            )}
+            {message.businessFlow ? (
               <KeyRelationships
                 relationships={toGraphRelationships(message.businessFlow)}
                 view={relationshipView}
                 label="Business flow"
               />
+            ) : (
+              stillFilling && <SectionLoading label="Mapping business flow" />
             )}
           </>
         )}
@@ -177,6 +225,13 @@ export function MessageBubble({
           <img src="/aia-sender.png" alt="You" />
         </div>
       )}
+
+      <CodeReferenceModal
+        isOpen={openRefChunkId !== null || openRefProgramId !== null}
+        citation={openRefCitation}
+        programId={openRefProgramId}
+        onClose={closeReference}
+      />
     </div>
   )
 }

@@ -3,8 +3,11 @@ import type {
   SourceCitation,
   GraphRelationship,
   ImpactAnalysis,
+  BusinessRule,
   DecisionTableRow,
   BusinessFlow,
+  DataDictionaryEntry,
+  TechnicalRule,
   SseEvent,
   ConversationListResponse,
   ConversationDetail,
@@ -205,21 +208,25 @@ interface StreamHandlers {
     sources: SourceCitation[]
     graphContext: GraphRelationship[]
     chunksRetrieved: number
-    impactAnalysis?: ImpactAnalysis
   }) => void
   onToken: (content: string) => void
   onCorrection?: (
     sources: SourceCitation[],
     graphContext: GraphRelationship[],
     impactAnalysis: null,
-    businessRules: string[],
+    businessRules: BusinessRule[],
     decisionTable: DecisionTableRow[],
     businessFlow: null,
+    dataDictionary: DataDictionaryEntry[],
+    technicalRules: TechnicalRule[],
   ) => void
   onFollowups?: (questions: string[]) => void
-  onBusinessRules?: (rules: string[]) => void
+  onBusinessRules?: (rules: BusinessRule[]) => void
   onDecisionTable?: (rows: DecisionTableRow[]) => void
   onBusinessFlow?: (flow: BusinessFlow) => void
+  onDataDictionary?: (entries: DataDictionaryEntry[]) => void
+  onTechnicalRules?: (rules: TechnicalRule[]) => void
+  onImpactAnalysis?: (analysis: ImpactAnalysis) => void
 }
 
 export async function askStream(question: string, handlers: StreamHandlers, signal?: AbortSignal): Promise<void> {
@@ -267,6 +274,8 @@ export async function askStream(question: string, handlers: StreamHandlers, sign
             parsed.businessRules,
             parsed.decisionTable,
             parsed.businessFlow,
+            parsed.dataDictionary,
+            parsed.technicalRules,
           )
         } else if (parsed.type === 'followups') {
           handlers.onFollowups?.(parsed.questions)
@@ -276,6 +285,12 @@ export async function askStream(question: string, handlers: StreamHandlers, sign
           handlers.onDecisionTable?.(parsed.rows)
         } else if (parsed.type === 'businessFlow') {
           handlers.onBusinessFlow?.(parsed.flow)
+        } else if (parsed.type === 'technicalRules') {
+          handlers.onTechnicalRules?.(parsed.rules)
+        } else if (parsed.type === 'dataDictionary') {
+          handlers.onDataDictionary?.(parsed.entries)
+        } else if (parsed.type === 'impactAnalysis') {
+          handlers.onImpactAnalysis?.(parsed.analysis)
         }
       } catch {
         // Ignore partial/malformed SSE frames — the buffer will complete on the next chunk.
