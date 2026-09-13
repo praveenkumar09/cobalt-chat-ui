@@ -88,7 +88,7 @@ function NodeIcon({ type }: { type: string }) {
   }
 }
 
-function NodePill({ label, type }: { label: string; type: string }) {
+export function NodePill({ label, type }: { label: string; type: string }) {
   return (
     <span className="node-pill" style={{ '--nc-rgb': nodeColor(type) } as CSSProperties}>
       <NodeIcon type={type} />

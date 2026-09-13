@@ -4,11 +4,14 @@ import type { ResponseMode } from '../types'
 import type { Theme } from '../hooks/useTheme'
 import { FONT_SIZE_ORDER, type FontSize } from '../hooks/useFontSize'
 import type { RelationshipView } from '../hooks/useRelationshipView'
+import type { ViewMode } from '../hooks/useViewMode'
 
 interface HeaderProps {
   mode: ResponseMode
   onModeChange: (mode: ResponseMode) => void
-  onClear: () => void
+  onNewChat: () => void
+  historyOpen: boolean
+  onToggleHistory: () => void
   disabled: boolean
   easyMode: boolean
   onToggleEasyMode: () => void
@@ -18,6 +21,10 @@ interface HeaderProps {
   onFontSizeChange: (size: FontSize) => void
   relationshipView: RelationshipView
   onRelationshipViewChange: (view: RelationshipView) => void
+  viewMode: ViewMode
+  onViewModeChange: (mode: ViewMode) => void
+  email: string
+  onLogout: () => void
 }
 
 const RELATIONSHIP_VIEW_ORDER: RelationshipView[] = ['cards', 'chain', 'hub']
@@ -26,6 +33,20 @@ const RELATIONSHIP_VIEW_LABEL: Record<RelationshipView, string> = {
   cards: 'Cards',
   chain: 'Chain',
   hub: 'Hub',
+}
+
+const VIEW_MODE_ORDER: ViewMode[] = ['tech', 'business', 'impact']
+
+const VIEW_MODE_LABEL: Record<ViewMode, string> = {
+  tech: 'Tech',
+  business: 'Business',
+  impact: 'Impact',
+}
+
+const VIEW_MODE_TITLE: Record<ViewMode, string> = {
+  tech: 'Show everything — citations, relationships, branching',
+  business: 'Hide citations, key relationships, and branching',
+  impact: 'Tech view, plus impact analysis for change requests',
 }
 
 const FONT_SIZE_LABEL: Record<FontSize, string> = {
@@ -45,7 +66,9 @@ const FONT_SIZE_TITLE: Record<FontSize, string> = {
 export function Header({
   mode,
   onModeChange,
-  onClear,
+  onNewChat,
+  historyOpen,
+  onToggleHistory,
   disabled,
   easyMode,
   onToggleEasyMode,
@@ -55,6 +78,10 @@ export function Header({
   onFontSizeChange,
   relationshipView,
   onRelationshipViewChange,
+  viewMode,
+  onViewModeChange,
+  email,
+  onLogout,
 }: HeaderProps) {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const settingsRef = useRef<HTMLDivElement>(null)
@@ -80,6 +107,20 @@ export function Header({
   return (
     <header className="chat-header">
       <div className="chat-header__leading">
+        <button
+          type="button"
+          className={`icon-btn${historyOpen ? ' is-active' : ''}`}
+          onClick={onToggleHistory}
+          aria-pressed={historyOpen}
+          aria-label={historyOpen ? 'Close chat history' : 'Open chat history'}
+          title="Chat history"
+        >
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <rect x="3" y="4" width="18" height="16" rx="2.5" />
+            <path d="M9.5 4v16" strokeLinecap="round" />
+          </svg>
+        </button>
+
         <div className="settings-anchor" ref={settingsRef}>
           <button
             type="button"
@@ -178,6 +219,33 @@ export function Header({
                   ))}
                 </div>
               </div>
+
+              <div className="settings-panel__row settings-panel__row--4">
+                <span className="settings-panel__label">View</span>
+                <div className="view-mode-toggle" role="group" aria-label="Response view">
+                  {VIEW_MODE_ORDER.map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      className={v === viewMode ? 'view-mode-toggle__btn is-active' : 'view-mode-toggle__btn'}
+                      onClick={() => onViewModeChange(v)}
+                      aria-pressed={v === viewMode}
+                      title={VIEW_MODE_TITLE[v]}
+                    >
+                      {VIEW_MODE_LABEL[v]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="settings-panel__row settings-panel__row--5 settings-panel__account">
+                <span className="settings-panel__account-email" title={email}>
+                  {email}
+                </span>
+                <button type="button" className="settings-panel__signout" onClick={onLogout}>
+                  Sign out
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -243,15 +311,9 @@ export function Header({
             </svg>
           )}
         </button>
-        <button type="button" className="icon-btn" onClick={onClear} aria-label="Clear conversation">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <path
-              d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2m2 0v13a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V7h10Z"
-              stroke="currentColor"
-              strokeWidth="1.7"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+        <button type="button" className="icon-btn" onClick={onNewChat} aria-label="Start a new chat" title="New chat">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path d="M12 5v14M5 12h14" strokeLinecap="round" />
           </svg>
         </button>
       </div>

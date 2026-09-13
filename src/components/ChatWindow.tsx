@@ -3,29 +3,99 @@ import { Header } from './Header'
 import { MessageBubble } from './MessageBubble'
 import { ChatInput } from './ChatInput'
 import { ResizeHandle } from './ResizeHandle'
+import { HistoryDrawer } from './HistoryDrawer'
 import { useChat } from '../hooks/useChat'
 import { useResizable } from '../hooks/useResizable'
 import { useTheme } from '../hooks/useTheme'
 import { useFontSize } from '../hooks/useFontSize'
 import { useRelationshipView } from '../hooks/useRelationshipView'
+import { useViewMode } from '../hooks/useViewMode'
+import { useSuggestions } from '../hooks/useSuggestions'
+import type { Session } from '../hooks/useSession'
 
-const SUGGESTIONS = [
-  'What does my critical illness plan cover?',
-  'How do I file a claim for hospitalization?',
-  'Explain the waiting period for my policy.',
-]
+interface ChatWindowProps {
+  session: Session
+  onLogout: () => void
+}
 
-export function ChatWindow() {
-  const { messages, mode, setMode, isBusy, send, stop, clear, regenerate } = useChat()
+export function ChatWindow({ session, onLogout }: ChatWindowProps) {
+  const {
+    messages,
+    mode,
+    setMode,
+    isBusy,
+    send,
+    stop,
+    newChat,
+    regenerate,
+    branchFrom,
+    selectSibling,
+    loadConversation,
+    conversationId,
+  } = useChat()
   const { size, isDragging, handleProps } = useResizable()
   const { theme, toggleTheme } = useTheme()
   const { fontSize, setFontSize } = useFontSize()
   const { relationshipView, setRelationshipView } = useRelationshipView()
-  const [easyMode, setEasyMode] = useState(false)
+  const { viewMode, setViewMode } = useViewMode()
+  const { suggestions, loading: suggestionsLoading } = useSuggestions()
+  // Full page by default after login — the existing shrink/expand toggle lets
+  // the user collapse back to the floating resizable widget.
+  const [easyMode, setEasyMode] = useState(true)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [branchingFrom, setBranchingFrom] = useState<{ id: string; label: string } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  // Tracks whether the user is already at the bottom, so streaming tokens keep
+  // the view pinned there without fighting a scroll they did to read upward.
+  const stickToBottomRef = useRef(true)
+
+  const handleSelectConversation = (id: string) => {
+    loadConversation(id)
+    setBranchingFrom(null)
+    setHistoryOpen(false)
+  }
+
+  const handleNewChat = () => {
+    newChat()
+    setBranchingFrom(null)
+    setHistoryOpen(false)
+  }
+
+  const handleBranch = (messageId: string) => {
+    const source = messages.find((m) => m.id === messageId)
+    const label = source ? source.content.slice(0, 60) : ''
+    setBranchingFrom({ id: messageId, label })
+  }
+
+  const handleSend = (question: string) => {
+    if (branchingFrom) {
+      const parentId = branchingFrom.id
+      setBranchingFrom(null)
+      branchFrom(parentId, question)
+    } else {
+      send(question)
+    }
+  }
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+    const el = scrollRef.current
+    if (!el) return
+    const handleScroll = () => {
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+      stickToBottomRef.current = distanceFromBottom < 80
+    }
+    el.addEventListener('scroll', handleScroll, { passive: true })
+    return () => el.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el || !stickToBottomRef.current) return
+    // Streaming updates fire on every token — an animated `behavior: 'smooth'`
+    // scroll restarted that often fights its own previous animation and
+    // visibly bounces. Snapping instantly instead makes the view simply
+    // follow the growing content, which reads as smooth continuous scroll.
+    el.scrollTop = el.scrollHeight
   }, [messages])
 
   const windowClassName = [
@@ -41,7 +111,9 @@ export function ChatWindow() {
       <Header
         mode={mode}
         onModeChange={setMode}
-        onClear={clear}
+        onNewChat={handleNewChat}
+        historyOpen={historyOpen}
+        onToggleHistory={() => setHistoryOpen((v) => !v)}
         disabled={isBusy}
         easyMode={easyMode}
         onToggleEasyMode={() => setEasyMode((v) => !v)}
@@ -51,6 +123,10 @@ export function ChatWindow() {
         onFontSizeChange={setFontSize}
         relationshipView={relationshipView}
         onRelationshipViewChange={setRelationshipView}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        email={session.email}
+        onLogout={onLogout}
       />
 
       <div className="chat-body" ref={scrollRef}>
@@ -60,11 +136,19 @@ export function ChatWindow() {
             <h2>How can I help you today?</h2>
             <p>Ask anything about your AIA policies, claims, or coverage.</p>
             <div className="suggestion-list">
-              {SUGGESTIONS.map((s) => (
-                <button key={s} type="button" className="suggestion-chip" onClick={() => send(s)}>
-                  {s}
-                </button>
-              ))}
+              {suggestionsLoading ? (
+                <>
+                  <span className="suggestion-chip suggestion-chip--skeleton" aria-hidden="true" />
+                  <span className="suggestion-chip suggestion-chip--skeleton" aria-hidden="true" />
+                  <span className="suggestion-chip suggestion-chip--skeleton" aria-hidden="true" />
+                </>
+              ) : (
+                suggestions.map((s) => (
+                  <button key={s} type="button" className="suggestion-chip" onClick={() => send(s)}>
+                    {s}
+                  </button>
+                ))
+              )}
             </div>
           </div>
         ) : (
@@ -74,16 +158,43 @@ export function ChatWindow() {
               message={message}
               onRegenerate={regenerate}
               onAsk={send}
+              onBranch={handleBranch}
+              onSelectSibling={selectSibling}
               isBusy={isBusy}
               isLatest={i === messages.length - 1}
               relationshipView={relationshipView}
+              viewMode={viewMode}
             />
           ))
         )}
       </div>
 
-      <ChatInput onSend={send} onStop={stop} isBusy={isBusy} />
+      {branchingFrom && (
+        <div className="branch-chip">
+          <span className="branch-chip__label">
+            Branching from: “{branchingFrom.label}
+            {branchingFrom.label.length >= 60 ? '…' : ''}”
+          </span>
+          <button
+            type="button"
+            className="branch-chip__dismiss"
+            onClick={() => setBranchingFrom(null)}
+            aria-label="Cancel branching"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      <ChatInput onSend={handleSend} onStop={stop} isBusy={isBusy} />
       <ResizeHandle {...handleProps} />
+
+      <HistoryDrawer
+        isOpen={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        onSelect={handleSelectConversation}
+        activeConversationId={conversationId}
+      />
     </div>
   )
 }

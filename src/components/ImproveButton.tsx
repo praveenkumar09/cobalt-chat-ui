@@ -22,6 +22,7 @@ export function ImproveButton() {
         className={`action-btn improve-btn${open ? ' is-open' : ''}`}
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
+        aria-label="Suggest improvement"
       >
         <svg
           className="improve-icon"

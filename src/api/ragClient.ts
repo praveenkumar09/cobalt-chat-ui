@@ -1,8 +1,101 @@
-import type { AskResponse, SourceCitation, GraphRelationship, SseEvent } from '../types'
+import type {
+  AskResponse,
+  SourceCitation,
+  GraphRelationship,
+  ImpactAnalysis,
+  SseEvent,
+  ConversationListResponse,
+  ConversationDetail,
+  StoredMessagePayload,
+  Role,
+} from '../types'
+import { getSessionToken } from '../utils/session'
 
 const BASE_URL = (import.meta.env.VITE_RAG_API_BASE_URL as string | undefined) ?? 'http://localhost:8083'
 
 export class RagApiError extends Error {}
+
+function clientHeaders(extra?: Record<string, string>): Record<string, string> {
+  return { 'X-Session-Token': getSessionToken(), ...extra }
+}
+
+/** Best-effort — a persistence hiccup should never interrupt the live chat. */
+export async function upsertMessage(
+  conversationId: string,
+  messageId: string,
+  role: Role,
+  content: string,
+  payload: StoredMessagePayload | null,
+  parentId: string | null = null,
+): Promise<void> {
+  try {
+    await fetch(`${BASE_URL}/api/conversations/${conversationId}/messages/${messageId}`, {
+      method: 'PUT',
+      headers: clientHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ role, content, payload, parentId }),
+    })
+  } catch {
+    // Ignore — history persistence is not on the critical path of the chat.
+  }
+}
+
+/** Switches the conversation's active path to run through messageId (a sibling switch). */
+export async function selectBranch(conversationId: string, messageId: string): Promise<ConversationDetail> {
+  const res = await fetch(`${BASE_URL}/api/conversations/${conversationId}/select-branch`, {
+    method: 'POST',
+    headers: clientHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ messageId }),
+  })
+  if (!res.ok) {
+    throw new RagApiError(`Request failed with status ${res.status}`)
+  }
+  return (await res.json()) as ConversationDetail
+}
+
+export async function fetchConversations(
+  limit: number,
+  offset: number,
+  signal?: AbortSignal,
+): Promise<ConversationListResponse> {
+  const res = await fetch(`${BASE_URL}/api/conversations?limit=${limit}&offset=${offset}`, {
+    headers: clientHeaders(),
+    signal,
+  })
+  if (!res.ok) {
+    throw new RagApiError(`Request failed with status ${res.status}`)
+  }
+  return (await res.json()) as ConversationListResponse
+}
+
+export async function fetchConversation(id: string, signal?: AbortSignal): Promise<ConversationDetail> {
+  const res = await fetch(`${BASE_URL}/api/conversations/${id}`, {
+    headers: clientHeaders(),
+    signal,
+  })
+  if (!res.ok) {
+    throw new RagApiError(`Request failed with status ${res.status}`)
+  }
+  return (await res.json()) as ConversationDetail
+}
+
+export async function deleteConversation(id: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/conversations/${id}`, {
+    method: 'DELETE',
+    headers: clientHeaders(),
+  })
+  if (!res.ok) {
+    throw new RagApiError(`Request failed with status ${res.status}`)
+  }
+}
+
+export async function fetchSuggestions(signal?: AbortSignal): Promise<string[]> {
+  const res = await fetch(`${BASE_URL}/api/suggestions`, { signal })
+  if (!res.ok) {
+    throw new RagApiError(`Request failed with status ${res.status}`)
+  }
+  const data = (await res.json()) as { suggestions: string[] }
+  return data.suggestions
+}
 
 export async function askComplete(question: string, signal?: AbortSignal): Promise<AskResponse> {
   const res = await fetch(`${BASE_URL}/api/ask/formal`, {
@@ -18,9 +111,14 @@ export async function askComplete(question: string, signal?: AbortSignal): Promi
 }
 
 interface StreamHandlers {
-  onMetadata: (meta: { sources: SourceCitation[]; graphContext: GraphRelationship[]; chunksRetrieved: number }) => void
+  onMetadata: (meta: {
+    sources: SourceCitation[]
+    graphContext: GraphRelationship[]
+    chunksRetrieved: number
+    impactAnalysis?: ImpactAnalysis
+  }) => void
   onToken: (content: string) => void
-  onCorrection?: (sources: SourceCitation[], graphContext: GraphRelationship[]) => void
+  onCorrection?: (sources: SourceCitation[], graphContext: GraphRelationship[], impactAnalysis: null) => void
   onFollowups?: (questions: string[]) => void
 }
 
@@ -62,7 +160,7 @@ export async function askStream(question: string, handlers: StreamHandlers, sign
         } else if (parsed.type === 'token') {
           handlers.onToken(parsed.content)
         } else if (parsed.type === 'correction') {
-          handlers.onCorrection?.(parsed.sources, parsed.graphContext)
+          handlers.onCorrection?.(parsed.sources, parsed.graphContext, parsed.impactAnalysis)
         } else if (parsed.type === 'followups') {
           handlers.onFollowups?.(parsed.questions)
         }

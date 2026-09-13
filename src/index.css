@@ -99,6 +99,10 @@ textarea {
   overflow: hidden;
   will-change: width, height;
   transition: background 0.25s ease, border-color 0.25s ease;
+  /* Lets message-actions respond to the widget's own width (shrink mode
+     resizes this element directly, independent of the viewport). */
+  container-type: inline-size;
+  container-name: chat-window;
 }
 
 .chat-window--dragging {
@@ -220,6 +224,53 @@ textarea {
   animation-delay: 0.17s;
 }
 
+.settings-panel__row--4 {
+  animation-delay: 0.24s;
+}
+
+.settings-panel__row--5 {
+  animation-delay: 0.31s;
+}
+
+.settings-panel__account {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
+}
+
+.settings-panel__account-email {
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 130px;
+}
+
+.settings-panel__signout {
+  flex-shrink: 0;
+  border: none;
+  background: rgba(211, 17, 69, 0.08);
+  color: var(--aia-red);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.2s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.settings-panel__signout:hover {
+  background: rgba(211, 17, 69, 0.14);
+}
+
+.settings-panel__signout:active {
+  transform: scale(0.92);
+  transition: transform 0.08s cubic-bezier(0.4, 0, 1, 1);
+}
+
 @keyframes settings-row-in {
   0% {
     opacity: 0;
@@ -305,6 +356,40 @@ textarea {
 }
 
 .relationship-view-toggle__btn:active {
+  transform: scale(0.9);
+  transition: transform 0.08s cubic-bezier(0.4, 0, 1, 1);
+}
+
+.view-mode-toggle {
+  display: flex;
+  background: rgba(var(--tint-rgb), 0.06);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.view-mode-toggle__btn {
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.2s ease, color 0.2s ease,
+    transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.view-mode-toggle__btn.is-active {
+  background: var(--surface-solid);
+  color: var(--aia-red);
+  font-weight: 700;
+  box-shadow: 0 1px 4px rgba(var(--shadow-rgb), 0.16);
+}
+
+.view-mode-toggle__btn:active {
   transform: scale(0.9);
   transition: transform 0.08s cubic-bezier(0.4, 0, 1, 1);
 }
@@ -510,6 +595,32 @@ textarea {
   border-color: rgba(var(--tint-rgb), 0.16);
 }
 
+.suggestion-chip--skeleton {
+  display: block;
+  height: 18px;
+  cursor: default;
+  background: linear-gradient(
+    100deg,
+    rgba(var(--tint-rgb), 0.04) 30%,
+    rgba(var(--tint-rgb), 0.09) 50%,
+    rgba(var(--tint-rgb), 0.04) 70%
+  );
+  background-size: 220% 100%;
+  animation: shimmer 1.8s linear infinite;
+}
+
+.suggestion-chip--skeleton:nth-child(1) {
+  width: 78%;
+}
+
+.suggestion-chip--skeleton:nth-child(2) {
+  width: 92%;
+}
+
+.suggestion-chip--skeleton:nth-child(3) {
+  width: 64%;
+}
+
 /* ── Messages ─────────────────────────────────────────────────────────────── */
 
 .message-row {
@@ -610,6 +721,21 @@ textarea {
   color: var(--aia-red-dark);
 }
 
+.bubble--branch-flash {
+  animation:
+    bubble-pop 0.34s cubic-bezier(0.3, 1.4, 0.55, 1) both,
+    branch-flash 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes branch-flash {
+  0% {
+    box-shadow: 0 0 0 0 rgba(var(--tint-rgb), 0.55);
+  }
+  100% {
+    box-shadow: 0 0 0 14px rgba(var(--tint-rgb), 0);
+  }
+}
+
 .bubble__caret {
   display: inline-block;
   width: 2px;
@@ -683,8 +809,37 @@ textarea {
 .message-actions {
   display: flex;
   align-items: flex-start;
+  flex-wrap: wrap;
   gap: 6px;
   margin-top: 6px;
+}
+
+/* Narrow widget (shrink mode) or narrow viewport: collapse to icon-only
+   buttons instead of wrapping the label text onto a second, cramped line. */
+@container chat-window (max-width: 480px) {
+  .action-btn {
+    gap: 0;
+    padding: 6px 8px;
+  }
+
+  .action-btn__label {
+    display: none;
+  }
+}
+
+/* Container queries aren't supported everywhere — flex-wrap above already
+   keeps buttons usable, but on very narrow viewports drop labels too. */
+@supports not (container-type: inline-size) {
+  @media (max-width: 480px) {
+    .action-btn {
+      gap: 0;
+      padding: 6px 8px;
+    }
+
+    .action-btn__label {
+      display: none;
+    }
+  }
 }
 
 .action-btn {
@@ -862,6 +1017,143 @@ textarea {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* ── Branch from here / sibling navigation ───────────────────────────── */
+
+.branch-btn:hover:not(:disabled) {
+  color: var(--tint);
+  border-color: rgba(var(--tint-rgb), 0.3);
+}
+
+.sibling-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 5px;
+  padding: 2px 4px;
+  border-radius: 999px;
+  background: rgba(var(--tint-rgb), 0.05);
+  border: 1px solid var(--hairline);
+  width: fit-content;
+  animation: sibling-nav-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes sibling-nav-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.sibling-nav__count {
+  transition: opacity 0.15s ease;
+}
+
+.sibling-nav.is-switching .sibling-nav__count {
+  opacity: 0.4;
+}
+
+.sibling-nav__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  border-radius: 50%;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.2s ease, color 0.2s ease,
+    transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.sibling-nav__btn:hover:not(:disabled) {
+  background: rgba(var(--tint-rgb), 0.12);
+  color: var(--tint);
+}
+
+.sibling-nav__btn:active:not(:disabled) {
+  transform: scale(0.82);
+  transition: transform 0.08s cubic-bezier(0.4, 0, 1, 1);
+}
+
+.sibling-nav__btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.sibling-nav__count {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  padding: 0 2px;
+}
+
+.branch-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 16px 8px;
+  padding: 7px 12px;
+  border-radius: 10px;
+  background: rgba(var(--tint-rgb), 0.08);
+  border: 1px solid rgba(var(--tint-rgb), 0.22);
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  animation: branch-chip-in 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes branch-chip-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.branch-chip__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.branch-chip__dismiss {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.2s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.branch-chip__dismiss:hover {
+  background: rgba(var(--tint-rgb), 0.14);
+}
+
+.branch-chip__dismiss:active {
+  transform: scale(0.85);
+  transition: transform 0.08s cubic-bezier(0.4, 0, 1, 1);
 }
 
 /* ── Follow-up suggestions ────────────────────────────────────────────── */
@@ -1306,6 +1598,92 @@ textarea {
     opacity: 1;
     transform: scale(1);
   }
+}
+
+/* ── Impact analysis: ordered change-tier list ────────────────────────── */
+
+.impact-content {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 10px 10px;
+}
+
+.impact-tier {
+  display: flex;
+  gap: 10px;
+  opacity: 0;
+  animation: rel-row-in 0.36s cubic-bezier(0.3, 1.2, 0.5, 1) both;
+}
+
+.impact-tier__marker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.impact-tier__step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--aia-red);
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.impact-tier__step.is-cycle {
+  background: rgba(var(--tint-rgb), 0.35);
+}
+
+.impact-tier__connector {
+  flex: 1;
+  width: 2px;
+  min-height: 14px;
+  margin: 2px 0;
+  background: rgba(var(--tint-rgb), 0.14);
+}
+
+.impact-tier__body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 16px;
+  min-width: 0;
+}
+
+.impact-tier__title {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+
+.impact-tier__title.is-cycle {
+  color: var(--aia-red-dark);
+}
+
+.impact-tier__nodes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.impact-tier__nodes .node-pill {
+  opacity: 0;
+  animation: rel-pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.impact-note {
+  margin: 2px 0 0;
+  font-size: 0.7rem;
+  color: var(--ink-faint);
+  font-style: italic;
 }
 
 /* ── Hub layout ────────────────────────────────────────────────────────── */
@@ -1864,6 +2242,579 @@ textarea {
 .chat-window--dragging .resize-handle {
   opacity: 1;
   transform: scale(1.12);
+}
+
+/* ── History drawer ───────────────────────────────────────────────────────── */
+
+.history-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.32);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  z-index: 30;
+}
+
+.history-backdrop.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.history-drawer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(78%, 280px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-solid);
+  border-right: 1px solid var(--hairline);
+  box-shadow: 10px 0 28px rgba(var(--shadow-rgb), 0.16);
+  transform: translateX(-105%);
+  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+  z-index: 31;
+  overflow: hidden;
+}
+
+.history-drawer.is-open {
+  transform: translateX(0);
+}
+
+.history-drawer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 14px 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--ink);
+  border-bottom: 1px solid var(--hairline);
+  flex-shrink: 0;
+}
+
+.history-drawer__close {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: none;
+  background: rgba(var(--tint-rgb), 0.06);
+  color: var(--ink-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.2s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.history-drawer__close:hover {
+  background: rgba(var(--tint-rgb), 0.12);
+}
+
+.history-drawer__close:active {
+  transform: scale(0.85);
+  transition: transform 0.08s cubic-bezier(0.4, 0, 1, 1);
+}
+
+.history-drawer__list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.history-drawer__empty {
+  margin: 24px 10px;
+  font-size: 0.8rem;
+  color: var(--ink-faint);
+  text-align: center;
+  line-height: 1.5;
+}
+
+.history-drawer__more {
+  margin-top: 4px;
+  border: 1px solid var(--hairline);
+  background: rgba(var(--tint-rgb), 0.03);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 8px;
+  border-radius: 9px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.2s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.history-drawer__more:hover:not(:disabled) {
+  background: rgba(var(--tint-rgb), 0.07);
+}
+
+.history-drawer__more:active:not(:disabled) {
+  transform: scale(0.97);
+  transition: transform 0.08s cubic-bezier(0.4, 0, 1, 1);
+}
+
+.history-drawer__more:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.history-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 10px;
+  opacity: 0;
+  will-change: transform, opacity;
+  animation: history-item-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes history-item-in {
+  from {
+    opacity: 0;
+    transform: translateX(-22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.history-item.is-active {
+  background: rgba(var(--tint-rgb), 0.06);
+}
+
+.history-item__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  border: none;
+  background: transparent;
+  padding: 8px 9px;
+  border-radius: 9px;
+  cursor: pointer;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.2s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.history-item__body:hover {
+  background: rgba(var(--tint-rgb), 0.05);
+}
+
+.history-item__body:active {
+  transform: scale(0.98);
+  transition: transform 0.08s cubic-bezier(0.4, 0, 1, 1);
+}
+
+.history-item__title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.history-item__meta {
+  font-size: 0.66rem;
+  color: var(--ink-faint);
+}
+
+.history-item__delete {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--ink-faint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.history-item__delete:hover {
+  background: rgba(211, 17, 69, 0.08);
+  color: var(--aia-red);
+}
+
+.history-item__delete:active {
+  transform: scale(0.85);
+  transition: transform 0.08s cubic-bezier(0.4, 0, 1, 1);
+}
+
+.history-item__confirm {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  font-size: 0.7rem;
+  color: var(--ink-soft);
+  animation: rel-pop-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.history-item__confirm-btn {
+  border: none;
+  background: rgba(var(--tint-rgb), 0.07);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 5px 9px;
+  border-radius: 7px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.2s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.history-item__confirm-btn:active {
+  transform: scale(0.9);
+  transition: transform 0.08s cubic-bezier(0.4, 0, 1, 1);
+}
+
+.history-item__confirm-btn--danger {
+  background: var(--aia-red);
+  color: #ffffff;
+}
+
+.history-item--skeleton {
+  height: 44px;
+  border-radius: 10px;
+  background: linear-gradient(
+    100deg,
+    rgba(var(--tint-rgb), 0.04) 30%,
+    rgba(var(--tint-rgb), 0.09) 50%,
+    rgba(var(--tint-rgb), 0.04) 70%
+  );
+  background-size: 220% 100%;
+  animation: shimmer 1.8s linear infinite;
+}
+
+/* ── Auth screen ──────────────────────────────────────────────────────────── */
+/* Deliberately its own fixed visual world (built around the background
+   photo), independent of the app's light/dark theme tokens used everywhere
+   else — the same way a splash/gate screen commits to one look on purpose.
+   The artwork itself is a bright, professional light scene, so this screen
+   commits to a light iOS-glass treatment (dark ink text on a frosted white
+   pane) rather than the app's normal light/dark toggle. */
+
+.auth-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 48px min(8vw, 96px);
+  /* The artwork's mascot + wordmark live in roughly the left 60% of the
+     source image; anchoring the cover-crop there (instead of dead-center)
+     keeps the branding in frame across very different aspect ratios,
+     including a vertical/portrait monitor where cover-by-height crops a lot
+     of width away. */
+  background: url('/aia-orbit-light-bg.png') 25% center / cover no-repeat;
+  overflow: hidden;
+  color: #1c1c24;
+}
+
+.auth-screen__overlay {
+  position: absolute;
+  inset: 0;
+  /* A soft bloom behind where the card sits (keeps it legible over cloud
+     detail) plus a faint brand-tinted vignette at the edges — the source
+     image is already bright, so this only clarifies, never darkens. */
+  background:
+    radial-gradient(ellipse 62% 75% at 82% 50%, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 60%),
+    linear-gradient(120deg, rgba(211, 17, 69, 0.05) 0%, rgba(255, 255, 255, 0) 40%);
+  pointer-events: none;
+}
+
+.auth-card {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  min-width: 0;
+  width: min(400px, 100%);
+  box-sizing: border-box;
+}
+
+/* Ambient "breathing" glow behind the card — a slow, subtle pulse that gives
+   the glass a sense of life without ever drawing attention away from the form. */
+.auth-card::before {
+  content: '';
+  position: absolute;
+  inset: -34px;
+  z-index: -1;
+  border-radius: 30px;
+  background: radial-gradient(closest-side, rgba(211, 17, 69, 0.16), rgba(211, 17, 69, 0) 72%);
+  filter: blur(18px);
+  animation: auth-glow-breathe 5s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  pointer-events: none;
+}
+
+@keyframes auth-glow-breathe {
+  0%, 100% {
+    opacity: 0.5;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.03);
+  }
+}
+
+.auth-card__inner {
+  /* True iOS-material glass, light variant: a bright, low-alpha white tint
+     over heavy blur + saturation boost — the sky behind should read clearly
+     through it, just softened, the way Control Center reads in light mode. */
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(36px) saturate(180%);
+  -webkit-backdrop-filter: blur(36px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 22px;
+  padding: 32px 30px;
+  box-shadow: 0 24px 55px rgba(28, 28, 40, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  opacity: 0;
+  /* Only opacity moves at the container level — the children below carry
+     their own staggered translateY cascade, so the two never compound into
+     the double-motion jank a mismatched pair of transforms would cause. */
+  animation: auth-card-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes auth-card-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Staggered iOS-style reveal for the card's contents — each element cascades
+   in on the same easing curve, offset only by animation-delay (set inline per
+   element), rather than each running its own independent motion. */
+.auth-stagger {
+  opacity: 0;
+  animation: auth-child-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes auth-child-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.auth-card__inner h2 {
+  margin: 0 0 20px;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #1c1c24;
+}
+
+.auth-card__notice {
+  margin: -8px 0 16px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  background: rgba(21, 128, 61, 0.1);
+  border: 1px solid rgba(21, 128, 61, 0.3);
+  color: #15803d;
+  font-size: 0.78rem;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.auth-field span {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(28, 28, 36, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.auth-field input {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(28, 28, 36, 0.1);
+  border-radius: 11px;
+  padding: 11px 13px;
+  font: inherit;
+  font-size: 0.9rem;
+  color: #1c1c24;
+  outline: none;
+  box-shadow: 0 0 0 0 rgba(211, 17, 69, 0);
+  transition: border-color 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+    background 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.auth-field input::placeholder {
+  color: rgba(28, 28, 36, 0.35);
+}
+
+.auth-field input:focus {
+  border-color: rgba(211, 17, 69, 0.55);
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 0 0 4px rgba(211, 17, 69, 0.14);
+}
+
+.auth-form__error {
+  margin: -4px 0 0;
+  font-size: 0.78rem;
+  color: var(--aia-red-dark);
+  background: rgba(211, 17, 69, 0.08);
+  border: 1px solid rgba(211, 17, 69, 0.25);
+  padding: 8px 11px;
+  border-radius: 9px;
+}
+
+.auth-submit {
+  position: relative;
+  margin-top: 4px;
+  border: none;
+  background: var(--aia-red);
+  color: #ffffff;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+  padding: 12px;
+  border-radius: 11px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  box-sizing: border-box;
+  transition: background 0.2s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
+}
+
+.auth-submit:hover:not(:disabled) {
+  background: var(--aia-red-dark);
+}
+
+.auth-submit:active:not(:disabled) {
+  transform: scale(0.96);
+  transition: transform 0.08s cubic-bezier(0.4, 0, 1, 1);
+}
+
+.auth-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth-submit.is-success {
+  background: var(--aia-red-dark);
+  opacity: 1;
+  cursor: default;
+  animation: auth-submit-success-ring 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes auth-submit-success-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(211, 17, 69, 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 16px rgba(211, 17, 69, 0);
+  }
+}
+
+.auth-submit__check {
+  animation: auth-submit-check-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes auth-submit-check-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.auth-links {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.auth-links button {
+  border: none;
+  background: transparent;
+  color: rgba(28, 28, 36, 0.6);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  padding: 2px;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.2s ease;
+}
+
+.auth-links button:hover {
+  color: #1c1c24;
+  text-decoration: underline;
+}
+
+@media (max-width: 760px) {
+  .auth-screen {
+    justify-content: center;
+    padding: 32px 20px;
+  }
+}
+
+/* A vertical/portrait monitor: the background stays a true full-bleed
+   `cover` image (same as landscape — nothing to override there), and the
+   card simply centers in the middle of the screen instead of hugging the
+   right edge. Some cropping of the artwork is an inherent, accepted
+   trade-off of `cover` filling the whole screen on an extreme aspect ratio. */
+@media (orientation: portrait) {
+  .auth-screen {
+    justify-content: center;
+    padding: 28px 20px;
+  }
+
+  .auth-card {
+    width: 100%;
+    max-width: 400px;
+  }
 }
 
 /* ── Responsive ───────────────────────────────────────────────────────────── */
