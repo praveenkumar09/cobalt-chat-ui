@@ -27,6 +27,26 @@ function makeId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
 
+// SSE tokens are sub-word LLM tokenizer pieces, not whole words — a word can
+// arrive as "COB" then "OL" a moment later. Displaying the raw accumulator
+// immediately means that still-forming trailing fragment briefly shows on
+// screen only to change/extend right after, which reads as the text
+// "scrambling" while streaming. This returns only the text up to the last
+// completed word boundary, holding back a still-forming trailing fragment
+// until the next token confirms it's finished (or the stream ends, when the
+// full text — fragment included — is always shown regardless; see the
+// explicit final flush below, which never uses this function). Falls back to
+// showing everything once the trailing fragment gets unreasonably long (no
+// natural boundary yet), so nothing ever visibly hangs waiting for one.
+function safeDisplayText(full: string): string {
+  const lastBoundary = Math.max(full.lastIndexOf(' '), full.lastIndexOf('\n'), full.lastIndexOf('\t'))
+  const tailLength = full.length - (lastBoundary + 1)
+  if (lastBoundary === -1) {
+    return tailLength > 60 ? full : ''
+  }
+  return tailLength > 60 ? full : full.slice(0, lastBoundary + 1)
+}
+
 function toMessages(detail: ConversationDetail): Message[] {
   return detail.messages.map((m, i) => {
     const message: Message = {
@@ -138,7 +158,7 @@ export function useChat() {
                 if (rafHandle === null) {
                   rafHandle = requestAnimationFrame(() => {
                     rafHandle = null
-                    updateMessage(assistantId, { content: accumulated, stage: undefined })
+                    updateMessage(assistantId, { content: safeDisplayText(accumulated), stage: undefined })
                   })
                 }
               },
