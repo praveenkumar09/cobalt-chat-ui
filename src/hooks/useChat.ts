@@ -108,6 +108,30 @@ export function useChat() {
   const messagesRef = useRef<Message[]>([])
   messagesRef.current = messages
 
+  // isBusy (React state) only updates once a re-render commits — a guard
+  // like `if (isBusy) return` reads whatever was true when THIS closure was
+  // created, which can be stale for a beat. A fast double-click/double-Enter
+  // can slip both calls through that window before any state update lands.
+  // isBusyRef is written synchronously in the same tick setBusy is called,
+  // so a guard checking it is never stale, no matter how fast the next call
+  // comes in.
+  const isBusyRef = useRef(false)
+  const setBusy = useCallback((value: boolean) => {
+    isBusyRef.current = value
+    setIsBusy(value)
+  }, [])
+
+  // Belt-and-suspenders backstop for the same race: even if isBusyRef somehow
+  // didn't prevent two runAsk calls from both starting for the SAME
+  // assistantId (e.g. two rapid regenerate() calls), only one can be the
+  // most-recent "generation" for that id. Every state-mutating callback
+  // inside runAsk checks this before writing, so a superseded stream's
+  // updates become silent no-ops instead of interleaving with the current
+  // stream's — which is what actually produces spliced-together, garbled
+  // text (words/fragments from two different concurrent generations landing
+  // in the same message as their writes alternate).
+  const streamGenerationRef = useRef<Map<string, number>>(new Map())
+
   const updateMessage = useCallback((id: string, patch: Partial<Message>) => {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)))
   }, [])
@@ -119,7 +143,18 @@ export function useChat() {
 
   const runAsk = useCallback(
     async (question: string, assistantId: string, assistantParentId: string | null) => {
-      setIsBusy(true)
+      setBusy(true)
+
+      // This invocation's generation for this assistantId — see
+      // streamGenerationRef above. Any later runAsk call for the SAME
+      // assistantId bumps this past what's stored here, so isCurrent()
+      // starts returning false for THIS invocation from that point on.
+      const myGeneration = (streamGenerationRef.current.get(assistantId) ?? 0) + 1
+      streamGenerationRef.current.set(assistantId, myGeneration)
+      const isCurrent = () => streamGenerationRef.current.get(assistantId) === myGeneration
+      const safeUpdate = (patch: Partial<Message>) => {
+        if (isCurrent()) updateMessage(assistantId, patch)
+      }
 
       const controller = new AbortController()
       abortRef.current = controller
@@ -153,7 +188,7 @@ export function useChat() {
       try {
         if (mode === 'stream') {
           timersRef.current.push(
-            setTimeout(() => updateMessage(assistantId, { stage: 'retrieving' }), 450),
+            setTimeout(() => safeUpdate({ stage: 'retrieving' }), 450),
           )
 
           let accumulated = ''
@@ -163,7 +198,7 @@ export function useChat() {
               rafHandle = null
               const target = safeDisplayText(accumulated).length
               revealedLength = nextRevealLength(revealedLength, target)
-              updateMessage(assistantId, { content: accumulated.slice(0, revealedLength), stage: undefined })
+              safeUpdate({ content: accumulated.slice(0, revealedLength), stage: undefined })
               if (revealedLength < target) {
                 scheduleReveal()
               }
@@ -177,7 +212,7 @@ export function useChat() {
                 clearTimers()
                 finalSources = meta.sources
                 finalGraphContext = meta.graphContext
-                updateMessage(assistantId, {
+                safeUpdate({
                   stage: 'generating',
                   sources: meta.sources,
                   graphContext: meta.graphContext,
@@ -207,7 +242,7 @@ export function useChat() {
                 finalBusinessFlow = businessFlow
                 finalDataDictionary = dataDictionary
                 finalTechnicalRules = technicalRules
-                updateMessage(assistantId, {
+                safeUpdate({
                   sources,
                   graphContext,
                   impactAnalysis,
@@ -220,31 +255,31 @@ export function useChat() {
               },
               onFollowups: (followUpQuestions) => {
                 finalFollowUps = followUpQuestions
-                updateMessage(assistantId, { followUpQuestions })
+                safeUpdate({ followUpQuestions })
               },
               onBusinessRules: (rules) => {
                 finalBusinessRules = rules
-                updateMessage(assistantId, { businessRules: rules })
+                safeUpdate({ businessRules: rules })
               },
               onDecisionTable: (rows) => {
                 finalDecisionTable = rows
-                updateMessage(assistantId, { decisionTable: rows })
+                safeUpdate({ decisionTable: rows })
               },
               onBusinessFlow: (flow) => {
                 finalBusinessFlow = flow
-                updateMessage(assistantId, { businessFlow: flow })
+                safeUpdate({ businessFlow: flow })
               },
               onDataDictionary: (entries) => {
                 finalDataDictionary = entries
-                updateMessage(assistantId, { dataDictionary: entries })
+                safeUpdate({ dataDictionary: entries })
               },
               onTechnicalRules: (rules) => {
                 finalTechnicalRules = rules
-                updateMessage(assistantId, { technicalRules: rules })
+                safeUpdate({ technicalRules: rules })
               },
               onImpactAnalysis: (analysis) => {
                 finalImpactAnalysis = analysis
-                updateMessage(assistantId, { impactAnalysis: analysis })
+                safeUpdate({ impactAnalysis: analysis })
               },
             },
             controller.signal,
@@ -253,12 +288,12 @@ export function useChat() {
           // content would already be stale) and commit the final text directly,
           // in the same update that flips isStreaming off.
           cancelPendingFlush()
-          updateMessage(assistantId, { content: accumulated, isStreaming: false, stage: undefined })
+          safeUpdate({ content: accumulated, isStreaming: false, stage: undefined })
           playReceiveSound()
         } else {
           timersRef.current.push(
-            setTimeout(() => updateMessage(assistantId, { stage: 'retrieving' }), 700),
-            setTimeout(() => updateMessage(assistantId, { stage: 'generating' }), 1800),
+            setTimeout(() => safeUpdate({ stage: 'retrieving' }), 700),
+            setTimeout(() => safeUpdate({ stage: 'generating' }), 1800),
           )
 
           const response = await askComplete(question, controller.signal)
@@ -273,7 +308,7 @@ export function useChat() {
           finalBusinessFlow = response.businessFlow
           finalDataDictionary = response.dataDictionary
           finalTechnicalRules = response.technicalRules
-          updateMessage(assistantId, {
+          safeUpdate({
             content: response.answer,
             sources: response.sources,
             graphContext: response.graphContext,
@@ -294,7 +329,7 @@ export function useChat() {
         clearTimers()
         cancelPendingFlush()
         if ((err as Error).name === 'AbortError') {
-          updateMessage(assistantId, { isStreaming: false, stage: undefined })
+          safeUpdate({ isStreaming: false, stage: undefined })
         } else {
           const message =
             err instanceof RagApiError
@@ -302,12 +337,23 @@ export function useChat() {
               : 'Unable to reach the assistant. Please check the API is running on port 8083.'
           finalContent = message
           finalError = true
-          updateMessage(assistantId, { content: message, isStreaming: false, stage: undefined, error: true })
+          safeUpdate({ content: message, isStreaming: false, stage: undefined, error: true })
         }
       } finally {
-        setIsBusy(false)
-        abortRef.current = null
+        // Only the CURRENT generation may clear busy/abort state — if this
+        // invocation was superseded by a newer one for the same assistantId,
+        // that newer one is still running and owns these; a stale invocation
+        // finishing later must not flip isBusy to false out from under it.
+        if (isCurrent()) {
+          setBusy(false)
+          abortRef.current = null
+        }
       }
+
+      // A superseded invocation's answer is stale by definition — skip
+      // persisting it so it can never overwrite the current generation's
+      // (possibly still in-flight, possibly already-saved) result in the DB.
+      if (!isCurrent()) return
 
       const payload: StoredMessagePayload = {
         sources: finalSources,
@@ -325,13 +371,13 @@ export function useChat() {
       // branchFrom, to pick up sibling metadata) know the message has actually landed.
       await upsertMessage(conversationId, assistantId, 'assistant', finalContent, payload, assistantParentId)
     },
-    [mode, updateMessage, conversationId],
+    [mode, updateMessage, setBusy, conversationId],
   )
 
   const send = useCallback(
     async (question: string) => {
       const trimmed = question.trim()
-      if (!trimmed || isBusy) return
+      if (!trimmed || isBusyRef.current) return
 
       const current = messagesRef.current
       const parentId = current.length > 0 ? current[current.length - 1].id : null
@@ -352,7 +398,7 @@ export function useChat() {
       upsertMessage(conversationId, userMessage.id, 'user', trimmed, null, parentId)
       await runAsk(trimmed, assistantId, userMessage.id)
     },
-    [isBusy, runAsk, conversationId],
+    [runAsk, conversationId],
   )
 
   /** Starts an alternate follow-up from parentMessageId as a sibling of whatever
@@ -360,7 +406,7 @@ export function useChat() {
   const branchFrom = useCallback(
     async (parentMessageId: string, question: string) => {
       const trimmed = question.trim()
-      if (!trimmed || isBusy) return
+      if (!trimmed || isBusyRef.current) return
 
       const userMessage: Message = {
         id: makeId(),
@@ -405,13 +451,13 @@ export function useChat() {
         // arrows would be missing until the next load if this refresh fails.
       }
     },
-    [isBusy, runAsk, conversationId],
+    [runAsk, conversationId],
   )
 
   /** Switches the active path to run through messageId's branch (a sibling nav click). */
   const selectSibling = useCallback(
     async (messageId: string) => {
-      if (isBusy) return
+      if (isBusyRef.current) return
       try {
         const detail = await selectBranchApi(conversationId, messageId)
         setMessages(toMessages(detail))
@@ -419,12 +465,12 @@ export function useChat() {
         // Best-effort — leave the view as-is if the switch fails.
       }
     },
-    [isBusy, conversationId],
+    [conversationId],
   )
 
   const regenerate = useCallback(
     async (assistantId: string) => {
-      if (isBusy) return
+      if (isBusyRef.current) return
       const target = messagesRef.current.find((m) => m.id === assistantId)
       if (!target?.sourceQuestion) return
 
@@ -446,7 +492,7 @@ export function useChat() {
       })
       await runAsk(target.sourceQuestion, assistantId, target.parentId ?? null)
     },
-    [isBusy, runAsk, updateMessage],
+    [runAsk, updateMessage],
   )
 
   const stop = useCallback(() => {
@@ -462,7 +508,7 @@ export function useChat() {
 
   /** Restores a past conversation from history into the active chat window. */
   const loadConversation = useCallback(async (id: string) => {
-    if (isBusy) return
+    if (isBusyRef.current) return
     try {
       const detail = await fetchConversation(id)
       setMessages(toMessages(detail))
@@ -470,7 +516,7 @@ export function useChat() {
     } catch {
       // Best-effort — if the conversation is gone (deleted/expired), do nothing.
     }
-  }, [isBusy])
+  }, [])
 
   return {
     messages,
