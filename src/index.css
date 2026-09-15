@@ -1499,6 +1499,38 @@ textarea {
   padding: 0 10px 10px;
 }
 
+.rel-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rel-group + .rel-group {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--hairline);
+}
+
+.rel-group__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.68rem;
+  color: var(--ink-faint);
+  margin-bottom: 2px;
+}
+
+.rel-group__count {
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--ink-faint);
+  opacity: 0.7;
+}
+
 /* ── Business rules ───────────────────────────────────────────────────── */
 
 .rules-list {

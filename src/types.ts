@@ -23,6 +23,10 @@ export interface GraphRelationship {
   toId: string
   toLabel: string
   toType: string
+  /** "OUTGOING" (what the asked-about program calls, transitively), "INCOMING"
+   * (what calls into it, transitively), or absent for edges with no single
+   * seed program to be directional relative to (keyword fallback, business flow). */
+  direction?: 'OUTGOING' | 'INCOMING' | null
 }
 
 export interface ImpactedFile {

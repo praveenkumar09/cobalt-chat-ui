@@ -346,6 +346,46 @@ function HubView({
   )
 }
 
+// ── Direction grouping ──────────────────────────────────────────────────────
+// GraphSearchService tags each edge OUTGOING (what the asked-about program
+// calls, transitively) or INCOMING (what calls into it, transitively) once a
+// seed program is known. Edges with no `direction` (keyword-fallback matches,
+// or synthetic business-flow edges — neither has a single seed program to be
+// directional relative to) fall through to an ungrouped "Related" bucket, and
+// if NOTHING in the list has a direction at all, grouping is skipped entirely
+// so business-flow rendering is unchanged from before this existed.
+
+function hasAnyDirection(relationships: GraphRelationship[]): boolean {
+  return relationships.some((r) => r.direction === 'OUTGOING' || r.direction === 'INCOMING')
+}
+
+function partitionByDirection(relationships: GraphRelationship[]) {
+  const outgoing: GraphRelationship[] = []
+  const incoming: GraphRelationship[] = []
+  const other: GraphRelationship[] = []
+  relationships.forEach((r) => {
+    if (r.direction === 'OUTGOING') outgoing.push(r)
+    else if (r.direction === 'INCOMING') incoming.push(r)
+    else other.push(r)
+  })
+  return { outgoing, incoming, other }
+}
+
+function RelationshipGroupView({
+  view,
+  relationships,
+  onNodeClick,
+}: {
+  view: RelationshipView
+  relationships: GraphRelationship[]
+  onNodeClick?: (id: string, type: string) => void
+}) {
+  if (relationships.length === 0) return null
+  if (view === 'cards') return <CardsView relationships={relationships} onNodeClick={onNodeClick} />
+  if (view === 'chain') return <ChainView relationships={relationships} onNodeClick={onNodeClick} />
+  return <HubView relationships={relationships} onNodeClick={onNodeClick} />
+}
+
 export function KeyRelationships({
   relationships,
   view,
@@ -354,12 +394,41 @@ export function KeyRelationships({
 }: KeyRelationshipsProps) {
   if (relationships.length === 0) return null
 
+  const grouped = hasAnyDirection(relationships) ? partitionByDirection(relationships) : null
+
   return (
     <CollapsibleSection label={label} count={relationships.length}>
       <div className="rel-content">
-        {view === 'cards' && <CardsView relationships={relationships} onNodeClick={onNodeClick} />}
-        {view === 'chain' && <ChainView relationships={relationships} onNodeClick={onNodeClick} />}
-        {view === 'hub' && <HubView relationships={relationships} onNodeClick={onNodeClick} />}
+        {grouped ? (
+          <>
+            {grouped.outgoing.length > 0 && (
+              <div className="rel-group">
+                <div className="rel-group__label">
+                  Calls <span className="rel-group__count">{grouped.outgoing.length}</span>
+                </div>
+                <RelationshipGroupView view={view} relationships={grouped.outgoing} onNodeClick={onNodeClick} />
+              </div>
+            )}
+            {grouped.incoming.length > 0 && (
+              <div className="rel-group">
+                <div className="rel-group__label">
+                  Called by <span className="rel-group__count">{grouped.incoming.length}</span>
+                </div>
+                <RelationshipGroupView view={view} relationships={grouped.incoming} onNodeClick={onNodeClick} />
+              </div>
+            )}
+            {grouped.other.length > 0 && (
+              <div className="rel-group">
+                {(grouped.outgoing.length > 0 || grouped.incoming.length > 0) && (
+                  <div className="rel-group__label">Related</div>
+                )}
+                <RelationshipGroupView view={view} relationships={grouped.other} onNodeClick={onNodeClick} />
+              </div>
+            )}
+          </>
+        ) : (
+          <RelationshipGroupView view={view} relationships={relationships} onNodeClick={onNodeClick} />
+        )}
       </div>
     </CollapsibleSection>
   )
