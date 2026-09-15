@@ -53,6 +53,18 @@ export function useChat() {
   const abortRef = useRef<AbortController | null>(null)
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([])
 
+  // isBusy (React state) only updates once a re-render commits — a guard
+  // like `if (isBusy) return` reads whatever was true when THIS closure was
+  // created, which can be stale for a beat. A fast double-click/double-Enter
+  // can slip both calls through that window before any state update lands,
+  // firing two overlapping sends. isBusyRef is written synchronously in the
+  // same tick setBusy is called, so the guard below is never stale.
+  const isBusyRef = useRef(false)
+  const setBusy = useCallback((value: boolean) => {
+    isBusyRef.current = value
+    setIsBusy(value)
+  }, [])
+
   const updateMessage = useCallback((id: string, patch: Partial<Message>) => {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)))
   }, [])
@@ -65,7 +77,7 @@ export function useChat() {
   const send = useCallback(
     async (question: string) => {
       const trimmed = question.trim()
-      if (!trimmed || isBusy) return
+      if (!trimmed || isBusyRef.current) return
 
       const userMessage: Message = { id: makeId(), role: 'user', content: trimmed }
       const assistantId = makeId()
@@ -78,7 +90,7 @@ export function useChat() {
       }
 
       setMessages((prev) => [...prev, userMessage, assistantMessage])
-      setIsBusy(true)
+      setBusy(true)
 
       const controller = new AbortController()
       abortRef.current = controller
@@ -174,11 +186,11 @@ export function useChat() {
           updateMessage(assistantId, { content: message, isStreaming: false, stage: undefined, error: true })
         }
       } finally {
-        setIsBusy(false)
+        setBusy(false)
         abortRef.current = null
       }
     },
-    [isBusy, mode, updateMessage],
+    [mode, updateMessage, setBusy],
   )
 
   const stop = useCallback(() => {
