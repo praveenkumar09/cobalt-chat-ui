@@ -17,6 +17,7 @@ import { DataDictionaryView } from './DataDictionaryView'
 import { CodeReferenceModal } from './CodeReferenceModal'
 import { FollowUpSuggestions } from './FollowUpSuggestions'
 import { SectionLoading } from './SectionLoading'
+import { MarkdownMessage } from './MarkdownMessage'
 import type { BusinessFlow, GraphRelationship, Message, ResponseMode } from '../types'
 import type { RelationshipView } from '../hooks/useRelationshipView'
 import type { ViewMode } from '../hooks/useViewMode'
@@ -123,6 +124,8 @@ export function MessageBubble({
         >
           {showStatus ? (
             <StatusShimmer stage={message.stage!} />
+          ) : !isUser && !message.error && !message.isStreaming ? (
+            <MarkdownMessage content={message.content} />
           ) : (
             <span className="bubble__text">{message.content}</span>
           )}

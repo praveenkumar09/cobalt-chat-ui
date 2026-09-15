@@ -47,6 +47,25 @@ function safeDisplayText(full: string): string {
   return tailLength > 60 ? full : full.slice(0, lastBoundary + 1)
 }
 
+// Network delivery isn't perfectly steady — proxies, TCP buffering, and the
+// model itself can all cause tokens to arrive in occasional bursts, more so
+// the longer a response runs (more total data, more opportunity for one).
+// Jumping straight to whatever's newly safe to show (via safeDisplayText) on
+// every frame means a burst dumps a big chunk of text into the DOM in one
+// reflow — visually jarring regardless of how smooth arrival was a moment
+// before. This caps how much NEW text is revealed per frame once a backlog
+// exists, so a burst gets spread across a few frames as a smooth catch-up
+// instead of slamming into view at once. Small, normal token-by-token deltas
+// (the common case) still show immediately, no added latency — the backlog
+// after one ordinary token is well under SMALL_BACKLOG_CHARS.
+const SMALL_BACKLOG_CHARS = 12
+
+function nextRevealLength(current: number, target: number): number {
+  const backlog = target - current
+  if (backlog <= SMALL_BACKLOG_CHARS) return target
+  return current + Math.max(SMALL_BACKLOG_CHARS, Math.ceil(backlog * 0.35))
+}
+
 function toMessages(detail: ConversationDetail): Message[] {
   return detail.messages.map((m, i) => {
     const message: Message = {
@@ -116,14 +135,14 @@ export function useChat() {
       let finalDataDictionary: DataDictionaryEntry[] | undefined
       let finalTechnicalRules: TechnicalRule[] | undefined
       let finalError = false
-      // Coalesces rapid SSE token bursts into at most one re-render per animation
-      // frame. The stream can deliver far more tokens/sec than the browser can
-      // paint; re-wrapping the paragraph on every single token instead of once per
-      // frame is what visibly "scrambles" words near the wrap boundary while
-      // streaming. This never delays or drops a token — every character still
-      // lands in `accumulated` immediately — it only batches how often that gets
-      // committed to React state/the DOM, so it's strictly less render work, never more.
+      // Reveals at most one animation frame's worth of newly-safe text at a
+      // time (see nextRevealLength) instead of jumping straight to whatever
+      // safeDisplayText allows — coalescing rapid SSE bursts into a smooth,
+      // bounded-per-frame reveal rather than one big reflow. Self-reschedules
+      // while there's still backlog to drain even if no new token arrives in
+      // the meantime, so a burst keeps catching up smoothly on its own.
       let rafHandle: number | null = null
+      let revealedLength = 0
       const cancelPendingFlush = () => {
         if (rafHandle !== null) {
           cancelAnimationFrame(rafHandle)
@@ -138,6 +157,19 @@ export function useChat() {
           )
 
           let accumulated = ''
+          const scheduleReveal = () => {
+            if (rafHandle !== null) return
+            rafHandle = requestAnimationFrame(() => {
+              rafHandle = null
+              const target = safeDisplayText(accumulated).length
+              revealedLength = nextRevealLength(revealedLength, target)
+              updateMessage(assistantId, { content: accumulated.slice(0, revealedLength), stage: undefined })
+              if (revealedLength < target) {
+                scheduleReveal()
+              }
+            })
+          }
+
           await askStream(
             question,
             {
@@ -155,12 +187,7 @@ export function useChat() {
               onToken: (token) => {
                 accumulated += token
                 finalContent = accumulated
-                if (rafHandle === null) {
-                  rafHandle = requestAnimationFrame(() => {
-                    rafHandle = null
-                    updateMessage(assistantId, { content: safeDisplayText(accumulated), stage: undefined })
-                  })
-                }
+                scheduleReveal()
               },
               onCorrection: (
                 sources,
