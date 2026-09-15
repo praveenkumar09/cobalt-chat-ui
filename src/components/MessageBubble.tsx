@@ -2,6 +2,7 @@ import { AiaLogo } from './AiaLogo'
 import { StatusShimmer } from './StatusShimmer'
 import { HeartButton } from './HeartButton'
 import { ImproveButton } from './ImproveButton'
+import { MarkdownMessage } from './MarkdownMessage'
 import type { Message } from '../types'
 
 interface MessageBubbleProps {
@@ -33,6 +34,8 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         >
           {showStatus ? (
             <StatusShimmer stage={message.stage!} />
+          ) : !isUser && !message.error && !message.isStreaming ? (
+            <MarkdownMessage content={message.content} />
           ) : (
             <span className="bubble__text">{message.content}</span>
           )}
