@@ -44,6 +44,21 @@ export function useChat() {
       const controller = new AbortController()
       abortRef.current = controller
 
+      // Coalesces rapid SSE token bursts into at most one re-render per animation
+      // frame. The stream can deliver far more tokens/sec than the browser can
+      // paint; re-wrapping the paragraph on every single token instead of once per
+      // frame is what visibly "scrambles" words near the wrap boundary while
+      // streaming. This never delays or drops a token — every character still
+      // lands in `accumulated` immediately — it only batches how often that gets
+      // committed to React state/the DOM, so it's strictly less render work, never more.
+      let rafHandle: number | null = null
+      const cancelPendingFlush = () => {
+        if (rafHandle !== null) {
+          cancelAnimationFrame(rafHandle)
+          rafHandle = null
+        }
+      }
+
       try {
         if (mode === 'stream') {
           timersRef.current.push(
@@ -65,12 +80,21 @@ export function useChat() {
               },
               onToken: (token) => {
                 accumulated += token
-                updateMessage(assistantId, { content: accumulated, stage: undefined })
+                if (rafHandle === null) {
+                  rafHandle = requestAnimationFrame(() => {
+                    rafHandle = null
+                    updateMessage(assistantId, { content: accumulated, stage: undefined })
+                  })
+                }
               },
             },
             controller.signal,
           )
-          updateMessage(assistantId, { isStreaming: false, stage: undefined })
+          // The stream finished — cancel any still-pending batched flush (its
+          // content would already be stale) and commit the final text directly,
+          // in the same update that flips isStreaming off.
+          cancelPendingFlush()
+          updateMessage(assistantId, { content: accumulated, isStreaming: false, stage: undefined })
           playReceiveSound()
         } else {
           timersRef.current.push(
@@ -92,6 +116,7 @@ export function useChat() {
         }
       } catch (err) {
         clearTimers()
+        cancelPendingFlush()
         if ((err as Error).name === 'AbortError') {
           updateMessage(assistantId, { isStreaming: false, stage: undefined })
         } else {
