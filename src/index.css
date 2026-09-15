@@ -380,7 +380,6 @@ textarea {
   color: #ffffff;
   border-bottom-right-radius: 4px;
   box-shadow: 0 3px 10px rgba(211, 17, 69, 0.28);
-  transform-origin: bottom right;
 }
 
 .bubble--assistant {
@@ -388,20 +387,22 @@ textarea {
   border: 1px solid var(--hairline);
   color: var(--ink);
   border-bottom-left-radius: 4px;
-  transform-origin: bottom left;
 }
 
+/* opacity + translateY only (no scale): a scale transform visually stretches
+   the whole box, including in-flight streamed text, so while it overlaps a
+   streaming reflow it makes words appear to jump/scramble. translateY shifts
+   the box uniformly instead of warping its contents, so it stays safe to run
+   underneath live token updates. The overshoot "pop" feel still comes from
+   the cubic-bezier(0.3, 1.4, 0.55, 1) easing on the animation itself. */
 @keyframes bubble-pop {
   0% {
     opacity: 0;
-    transform: scale(0.35);
-  }
-  65% {
-    opacity: 1;
-    transform: scale(1.04);
+    transform: translateY(10px);
   }
   100% {
-    transform: scale(1);
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
