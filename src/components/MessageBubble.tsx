@@ -189,6 +189,16 @@ export function MessageBubble({
           />
         )}
 
+        {!isUser && !message.error && (
+          <>
+            {message.dataDictionary ? (
+              <DataDictionaryView entries={message.dataDictionary} onOpenReference={openReference} />
+            ) : (
+              stillFilling && <SectionLoading label="Extracting data dictionary" />
+            )}
+          </>
+        )}
+
         {viewMode === 'business' && !isUser && !message.error && (
           <>
             {message.businessRules ? (
@@ -200,11 +210,6 @@ export function MessageBubble({
               <DecisionTableView rows={message.decisionTable} onOpenReference={openReference} />
             ) : (
               stillFilling && <SectionLoading label="Building decision table" />
-            )}
-            {message.dataDictionary ? (
-              <DataDictionaryView entries={message.dataDictionary} onOpenReference={openReference} />
-            ) : (
-              stillFilling && <SectionLoading label="Extracting data dictionary" />
             )}
             {message.businessFlow ? (
               <KeyRelationships
