@@ -196,3 +196,18 @@ export interface ConversationDetail {
   title: string | null
   messages: ConversationMessage[]
 }
+
+export interface FeedbackEntry {
+  id: string
+  userEmail: string
+  question: string | null
+  answerSnippet: string | null
+  message: string
+  createdAt: string
+}
+
+export interface FeedbackStats {
+  totalCount: number
+  last7DaysCount: number
+  recent: FeedbackEntry[]
+}

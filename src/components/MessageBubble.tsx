@@ -135,7 +135,7 @@ export function MessageBubble({
         {showActions && (
           <div className="message-actions">
             <HeartButton />
-            <ImproveButton />
+            <ImproveButton question={message.sourceQuestion} answer={message.content} />
             <CopyButton text={message.content} />
             {onRegenerate && message.sourceQuestion && (
               <RegenerateButton onRegenerate={() => onRegenerate(message.id)} disabled={isBusy} />

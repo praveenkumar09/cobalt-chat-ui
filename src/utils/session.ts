@@ -5,8 +5,11 @@ interface StoredSession {
   email: string
 }
 
+// sessionStorage (not localStorage): the token must not outlive the browser
+// tab/window — closing it should require signing in again next time, rather
+// than silently resuming a session that's still valid server-side.
 function read(): StoredSession | null {
-  const raw = window.localStorage.getItem(STORAGE_KEY)
+  const raw = window.sessionStorage.getItem(STORAGE_KEY)
   if (!raw) return null
   try {
     const parsed = JSON.parse(raw) as Partial<StoredSession>
@@ -26,9 +29,9 @@ export function getStoredSession(): StoredSession | null {
 }
 
 export function setSession(token: string, email: string): void {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ token, email }))
+  window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ token, email }))
 }
 
 export function clearSession(): void {
-  window.localStorage.removeItem(STORAGE_KEY)
+  window.sessionStorage.removeItem(STORAGE_KEY)
 }

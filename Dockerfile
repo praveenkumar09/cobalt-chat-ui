@@ -4,7 +4,9 @@ COPY package.json package-lock.json* ./
 RUN npm install
 COPY . .
 ARG VITE_RAG_API_BASE_URL=http://localhost:8083
+ARG VITE_GRAFANA_BASE_URL=http://localhost:3001
 ENV VITE_RAG_API_BASE_URL=$VITE_RAG_API_BASE_URL
+ENV VITE_GRAFANA_BASE_URL=$VITE_GRAFANA_BASE_URL
 RUN npm run build
 
 FROM nginx:1.27-alpine

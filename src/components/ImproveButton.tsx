@@ -1,6 +1,12 @@
 import { useState } from 'react'
+import { submitFeedback } from '../api/feedbackClient'
 
-export function ImproveButton() {
+interface ImproveButtonProps {
+  question?: string
+  answer: string
+}
+
+export function ImproveButton({ question, answer }: ImproveButtonProps) {
   const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
   const [sent, setSent] = useState(false)
@@ -8,6 +14,10 @@ export function ImproveButton() {
   const submit = () => {
     if (!text.trim()) return
     setSent(true)
+    submitFeedback(question, answer, text.trim()).catch(() => {
+      // Best-effort — the confirmation is already shown; a delivery hiccup
+      // here shouldn't interrupt the chat.
+    })
     window.setTimeout(() => {
       setOpen(false)
       setSent(false)

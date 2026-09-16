@@ -3344,3 +3344,121 @@ span.code-line-removed {
     display: none;
   }
 }
+
+/* ── Admin page ──────────────────────────────────────────────────────── */
+
+.admin-page {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+  min-height: 100%;
+  color: var(--ink);
+}
+
+.admin-page__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.admin-page__header h1 {
+  font-size: 1.4rem;
+  margin: 0 0 4px;
+}
+
+.admin-page__subtitle {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.admin-page__header-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.admin-page__link-btn {
+  border: 1px solid var(--hairline);
+  background: var(--surface-solid);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.admin-page__link-btn:hover {
+  background: var(--hairline);
+}
+
+.admin-page__error,
+.admin-page__loading,
+.admin-page__empty {
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.admin-page__tiles {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.admin-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  padding: 16px 20px;
+  min-width: 140px;
+  background: var(--surface-solid);
+}
+
+.admin-tile__value {
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.admin-tile__label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+
+.admin-page__section {
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--surface-solid);
+  padding: 16px 6px 6px;
+}
+
+.admin-page__section h2 {
+  font-size: 0.9rem;
+  margin: 0 0 8px;
+  padding: 0 10px;
+}
+
+.stats-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 24px 24px 0;
+}
+
+.stats-page__header {
+  max-width: none;
+  margin-bottom: 16px;
+}
+
+.stats-page__frame {
+  flex: 1;
+  width: 100%;
+  border: 1px solid var(--hairline);
+  border-radius: 12px 12px 0 0;
+  background: var(--surface-solid);
+}

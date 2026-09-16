@@ -7,6 +7,7 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_RAG_API_BASE_URL: ${VITE_RAG_API_BASE_URL:-http://localhost:8083}
+        VITE_GRAFANA_BASE_URL: ${VITE_GRAFANA_BASE_URL:-http://localhost:3001}
     container_name: cobalt_chat_ui
     ports:
       - "3000:80"
