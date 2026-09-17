@@ -193,7 +193,7 @@ export async function fetchSuggestions(signal?: AbortSignal): Promise<string[]> 
 export async function askComplete(question: string, signal?: AbortSignal): Promise<AskResponse> {
   const res = await fetch(`${BASE_URL}/api/ask/formal`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: clientHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ question }),
     signal,
   })
@@ -232,7 +232,7 @@ interface StreamHandlers {
 export async function askStream(question: string, handlers: StreamHandlers, signal?: AbortSignal): Promise<void> {
   const res = await fetch(`${BASE_URL}/api/ask`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+    headers: clientHeaders({ 'Content-Type': 'application/json', Accept: 'text/event-stream' }),
     body: JSON.stringify({ question }),
     signal,
   })

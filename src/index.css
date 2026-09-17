@@ -3443,6 +3443,47 @@ span.code-line-removed {
   padding: 0 10px;
 }
 
+.admin-page__section-title {
+  font-size: 1.4rem;
+  margin: 40px 0 16px;
+}
+
+.admin-tile--danger {
+  border-color: rgba(211, 17, 69, 0.3);
+}
+
+.admin-tile--danger .admin-tile__value {
+  color: var(--aia-red);
+}
+
+.admin-tile--warning {
+  border-color: rgba(185, 130, 44, 0.35);
+}
+
+.admin-tile--warning .admin-tile__value {
+  color: rgb(185, 130, 44);
+}
+
+.security-badge {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.security-badge--prompt_injection {
+  background: rgba(211, 17, 69, 0.12);
+  color: var(--aia-red-dark);
+}
+
+.security-badge--pii_requested,
+.security-badge--pii_provided {
+  background: rgba(185, 130, 44, 0.14);
+  color: rgb(140, 95, 25);
+}
+
 .stats-page {
   display: flex;
   flex-direction: column;

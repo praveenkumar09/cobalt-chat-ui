@@ -211,3 +211,21 @@ export interface FeedbackStats {
   last7DaysCount: number
   recent: FeedbackEntry[]
 }
+
+export type SecurityViolationType = 'prompt_injection' | 'pii_requested' | 'pii_provided'
+
+export interface SecurityEvent {
+  id: string
+  userEmail: string
+  question: string
+  violationType: SecurityViolationType
+  createdAt: string
+}
+
+export interface SecurityStats {
+  totalCount: number
+  promptInjectionCount: number
+  piiRequestedCount: number
+  piiProvidedCount: number
+  recent: SecurityEvent[]
+}
