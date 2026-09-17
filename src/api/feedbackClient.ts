@@ -20,8 +20,8 @@ export async function submitFeedback(question: string | undefined, answer: strin
   }
 }
 
-export async function getFeedbackStats(limit = 50): Promise<FeedbackStats> {
-  const res = await fetch(`${BASE_URL}/api/admin/feedback/stats?limit=${limit}`, {
+export async function getFeedbackStats(limit = 10, offset = 0): Promise<FeedbackStats> {
+  const res = await fetch(`${BASE_URL}/api/admin/feedback/stats?limit=${limit}&offset=${offset}`, {
     headers: clientHeaders(),
   })
   if (!res.ok) {

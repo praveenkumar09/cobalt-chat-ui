@@ -236,6 +236,37 @@ export function Header({
                 </div>
               </div>
 
+              <div className="settings-panel__row settings-panel__row--6">
+                <span className="settings-panel__label">Insights</span>
+                <div className="settings-panel__links">
+                  <button
+                    type="button"
+                    className="settings-panel__link-btn"
+                    onClick={() => {
+                      // window.open (not a plain link) so the new tab is opened via
+                      // script — the browser then clones this tab's sessionStorage
+                      // into it, so the new tab is already signed in. A user-driven
+                      // "open in new tab" (middle-click, right-click menu) does NOT
+                      // get this treatment, which is why this has to be a button.
+                      window.open('/admin', '_blank')
+                      setSettingsOpen(false)
+                    }}
+                  >
+                    Feedback
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-panel__link-btn"
+                    onClick={() => {
+                      window.open('/stats', '_blank')
+                      setSettingsOpen(false)
+                    }}
+                  >
+                    Stats
+                  </button>
+                </div>
+              </div>
+
               <div className="settings-panel__row settings-panel__row--5 settings-panel__account">
                 <span className="settings-panel__account-email" title={email}>
                   {email}
