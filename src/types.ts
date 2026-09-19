@@ -230,3 +230,4 @@ export interface SecurityStats {
   piiProvidedCount: number
   recent: SecurityEvent[]
 }
+

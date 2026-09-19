@@ -11,6 +11,9 @@ interface KeyRelationshipsProps {
    * synthetic activity nodes have no real program to fetch, so this is
    * simply omitted there). */
   onNodeClick?: (id: string, type: string) => void
+  /** Skips the extra collapsed step when this is already nested inside
+   * another collapsible section (e.g. BusinessFlowSection's List view). */
+  defaultOpen?: boolean
 }
 
 // These reference the CSS custom properties in index.css (--n-program etc.)
@@ -391,13 +394,14 @@ export function KeyRelationships({
   view,
   label = 'Key relationships',
   onNodeClick,
+  defaultOpen = false,
 }: KeyRelationshipsProps) {
   if (relationships.length === 0) return null
 
   const grouped = hasAnyDirection(relationships) ? partitionByDirection(relationships) : null
 
   return (
-    <CollapsibleSection label={label} count={relationships.length}>
+    <CollapsibleSection label={label} count={relationships.length} defaultOpen={defaultOpen}>
       <div className="rel-content">
         {grouped ? (
           <>

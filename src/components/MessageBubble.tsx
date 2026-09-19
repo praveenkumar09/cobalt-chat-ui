@@ -1,5 +1,4 @@
 import { memo, useState } from 'react'
-import { AiaLogo } from './AiaLogo'
 import { StatusShimmer } from './StatusShimmer'
 import { HeartButton } from './HeartButton'
 import { ImproveButton } from './ImproveButton'
@@ -15,24 +14,15 @@ import { TechnicalRulesView } from './TechnicalRulesView'
 import { DecisionTableView } from './DecisionTableView'
 import { DataDictionaryView } from './DataDictionaryView'
 import { CodeReferenceModal } from './CodeReferenceModal'
+import { ChangeImpactReport } from './ChangeImpactReport'
+import { ExportReportButton } from './ExportReportButton'
+import { BusinessFlowSection } from './BusinessFlowSection'
 import { FollowUpSuggestions } from './FollowUpSuggestions'
 import { SectionPlaceholder } from './SectionPlaceholder'
 import { MarkdownMessage } from './MarkdownMessage'
-import type { BusinessFlow, GraphRelationship, Message, ResponseMode } from '../types'
+import type { Message, ResponseMode } from '../types'
 import type { RelationshipView } from '../hooks/useRelationshipView'
 import type { ViewMode } from '../hooks/useViewMode'
-
-function toGraphRelationships(flow: BusinessFlow): GraphRelationship[] {
-  return flow.edges.map((e) => ({
-    fromId: e.fromActivity,
-    fromLabel: e.fromActivity,
-    fromType: 'BUSINESS_ACTIVITY',
-    relType: e.relation,
-    toId: e.toActivity,
-    toLabel: e.toActivity,
-    toType: 'BUSINESS_ACTIVITY',
-  }))
-}
 
 interface MessageBubbleProps {
   message: Message
@@ -71,6 +61,7 @@ function MessageBubbleComponent({
 }: MessageBubbleProps) {
   const [openRefChunkId, setOpenRefChunkId] = useState<string | null>(null)
   const [openRefProgramId, setOpenRefProgramId] = useState<string | null>(null)
+  const [isReportOpen, setIsReportOpen] = useState(false)
   const openRefCitation = message.sources?.find((s) => s.chunkId === openRefChunkId) ?? null
 
   const openReference = (chunkId: string) => {
@@ -94,6 +85,11 @@ function MessageBubbleComponent({
   // Still working on a below-the-chat section: answer text has started, the
   // stream hasn't fully finished, and this particular field hasn't landed yet.
   const stillFilling = !isUser && !message.error && message.isStreaming && message.content.length > 0
+  const showExportReport =
+    showActions &&
+    viewMode === 'business' &&
+    ((message.businessRules && message.businessRules.length > 0) ||
+      (message.decisionTable && message.decisionTable.length > 0))
   const showFollowups =
     isLatest &&
     !isUser &&
@@ -108,7 +104,7 @@ function MessageBubbleComponent({
     <div className={`message-row ${isUser ? 'message-row--user' : 'message-row--assistant'}`}>
       {!isUser && (
         <div className="message-avatar">
-          <AiaLogo size={28} />
+          <img src="/aia-orbit-icon.png" alt="Orbit" />
         </div>
       )}
 
@@ -153,6 +149,7 @@ function MessageBubbleComponent({
             {showDeveloperExtras && onBranch && (
               <BranchButton onBranch={() => onBranch(message.id)} disabled={isBusy} />
             )}
+            {showExportReport && <ExportReportButton onClick={() => setIsReportOpen(true)} />}
           </div>
         )}
 
@@ -222,11 +219,7 @@ function MessageBubbleComponent({
               stillFilling && <SectionPlaceholder label="Decision table" />
             )}
             {message.businessFlow ? (
-              <KeyRelationships
-                relationships={toGraphRelationships(message.businessFlow)}
-                view={relationshipView}
-                label="Business flow"
-              />
+              <BusinessFlowSection flow={message.businessFlow} relationshipView={relationshipView} />
             ) : (
               stillFilling && <SectionPlaceholder label="Business flow" />
             )}
@@ -250,6 +243,10 @@ function MessageBubbleComponent({
         programId={openRefProgramId}
         onClose={closeReference}
       />
+
+      {showExportReport && (
+        <ChangeImpactReport message={message} isOpen={isReportOpen} onClose={() => setIsReportOpen(false)} />
+      )}
     </div>
   )
 }

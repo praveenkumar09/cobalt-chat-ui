@@ -82,6 +82,20 @@ const SECTIONS: { title: string; rows: { size: PanelSize; panels: Panel[] }[] }[
       },
     ],
   },
+  {
+    title: 'Usage',
+    rows: [
+      {
+        size: 'stat',
+        panels: [
+          { id: 23, title: 'Tech queries (all-time)' },
+          { id: 24, title: 'Business queries (all-time)' },
+          { id: 25, title: 'Tech vs business share' },
+        ],
+      },
+      { size: 'chart', panels: [{ id: 26, title: 'Queries by mode over time' }] },
+    ],
+  },
 ]
 
 // Individual "/d-solo/" panel embeds, NOT the whole dashboard in kiosk mode —
