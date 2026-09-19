@@ -33,12 +33,13 @@ export async function upsertMessage(
   content: string,
   payload: StoredMessagePayload | null,
   parentId: string | null = null,
+  viewMode: string | null = null,
 ): Promise<void> {
   try {
     await fetch(`${BASE_URL}/api/conversations/${conversationId}/messages/${messageId}`, {
       method: 'PUT',
       headers: clientHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ role, content, payload, parentId }),
+      body: JSON.stringify({ role, content, payload, parentId, viewMode }),
     })
   } catch {
     // Ignore — history persistence is not on the critical path of the chat.
@@ -190,11 +191,15 @@ export async function fetchSuggestions(signal?: AbortSignal): Promise<string[]> 
   return data.suggestions
 }
 
-export async function askComplete(question: string, signal?: AbortSignal): Promise<AskResponse> {
+export async function askComplete(
+  question: string,
+  viewMode: string,
+  signal?: AbortSignal,
+): Promise<AskResponse> {
   const res = await fetch(`${BASE_URL}/api/ask/formal`, {
     method: 'POST',
     headers: clientHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question, viewMode }),
     signal,
   })
   if (!res.ok) {
@@ -229,11 +234,16 @@ interface StreamHandlers {
   onImpactAnalysis?: (analysis: ImpactAnalysis) => void
 }
 
-export async function askStream(question: string, handlers: StreamHandlers, signal?: AbortSignal): Promise<void> {
+export async function askStream(
+  question: string,
+  viewMode: string,
+  handlers: StreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
   const res = await fetch(`${BASE_URL}/api/ask`, {
     method: 'POST',
     headers: clientHeaders({ 'Content-Type': 'application/json', Accept: 'text/event-stream' }),
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question, viewMode }),
     signal,
   })
 

@@ -8,6 +8,7 @@ import {
   RagApiError,
 } from '../api/ragClient'
 import { playReceiveSound } from '../utils/sound'
+import type { ViewMode } from './useViewMode'
 import type {
   ConversationDetail,
   ImpactAnalysis,
@@ -98,11 +99,15 @@ function toMessages(detail: ConversationDetail): Message[] {
   })
 }
 
-export function useChat() {
+export function useChat(headerViewMode: ViewMode) {
   const [messages, setMessages] = useState<Message[]>([])
   const [mode, setMode] = useState<ResponseMode>('stream')
   const [isBusy, setIsBusy] = useState(false)
   const [conversationId, setConversationId] = useState<string>(() => makeId())
+  // The mode this conversation is actually locked to, once it has started —
+  // null means "not started yet," so the live header toggle still applies.
+  const [lockedViewMode, setLockedViewMode] = useState<ViewMode | null>(null)
+  const activeViewMode = lockedViewMode ?? headerViewMode
   const abortRef = useRef<AbortController | null>(null)
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([])
   const messagesRef = useRef<Message[]>([])
@@ -142,7 +147,7 @@ export function useChat() {
   }
 
   const runAsk = useCallback(
-    async (question: string, assistantId: string, assistantParentId: string | null) => {
+    async (question: string, assistantId: string, assistantParentId: string | null, askViewMode: ViewMode) => {
       setBusy(true)
 
       // This invocation's generation for this assistantId — see
@@ -207,6 +212,7 @@ export function useChat() {
 
           await askStream(
             question,
+            askViewMode,
             {
               onMetadata: (meta) => {
                 clearTimers()
@@ -296,7 +302,7 @@ export function useChat() {
             setTimeout(() => safeUpdate({ stage: 'generating' }), 1800),
           )
 
-          const response = await askComplete(question, controller.signal)
+          const response = await askComplete(question, askViewMode, controller.signal)
           clearTimers()
           finalContent = response.answer
           finalSources = response.sources
@@ -380,7 +386,12 @@ export function useChat() {
       if (!trimmed || isBusyRef.current) return
 
       const current = messagesRef.current
-      const parentId = current.length > 0 ? current[current.length - 1].id : null
+      const isNewConversation = current.length === 0
+      const parentId = isNewConversation ? null : current[current.length - 1].id
+      // A brand-new conversation locks in whatever the header toggle currently
+      // says; an already-started one keeps using its own locked mode.
+      const effectiveViewMode = isNewConversation ? headerViewMode : activeViewMode
+      if (isNewConversation) setLockedViewMode(effectiveViewMode)
 
       const userMessage: Message = { id: makeId(), role: 'user', content: trimmed, parentId }
       const assistantId = makeId()
@@ -395,10 +406,10 @@ export function useChat() {
       }
 
       setMessages((prev) => [...prev, userMessage, assistantMessage])
-      upsertMessage(conversationId, userMessage.id, 'user', trimmed, null, parentId)
-      await runAsk(trimmed, assistantId, userMessage.id)
+      upsertMessage(conversationId, userMessage.id, 'user', trimmed, null, parentId, isNewConversation ? effectiveViewMode : null)
+      await runAsk(trimmed, assistantId, userMessage.id, effectiveViewMode)
     },
-    [runAsk, conversationId],
+    [runAsk, conversationId, headerViewMode, activeViewMode],
   )
 
   /** Starts an alternate follow-up from parentMessageId as a sibling of whatever
@@ -433,7 +444,7 @@ export function useChat() {
         return [...base, userMessage, assistantMessage]
       })
       await upsertMessage(conversationId, userMessage.id, 'user', trimmed, null, parentMessageId)
-      await runAsk(trimmed, assistantId, userMessage.id)
+      await runAsk(trimmed, assistantId, userMessage.id, activeViewMode)
 
       // The branch is now persisted (both messages landed and current_leaf_id
       // was advanced). Re-sync with the server so the branch point picks up
@@ -451,7 +462,7 @@ export function useChat() {
         // arrows would be missing until the next load if this refresh fails.
       }
     },
-    [runAsk, conversationId],
+    [runAsk, conversationId, activeViewMode],
   )
 
   /** Switches the active path to run through messageId's branch (a sibling nav click). */
@@ -490,9 +501,9 @@ export function useChat() {
         dataDictionary: undefined,
         technicalRules: undefined,
       })
-      await runAsk(target.sourceQuestion, assistantId, target.parentId ?? null)
+      await runAsk(target.sourceQuestion, assistantId, target.parentId ?? null, activeViewMode)
     },
-    [runAsk, updateMessage],
+    [runAsk, updateMessage, activeViewMode],
   )
 
   const stop = useCallback(() => {
@@ -504,6 +515,7 @@ export function useChat() {
   const newChat = useCallback(() => {
     setMessages([])
     setConversationId(makeId())
+    setLockedViewMode(null)
   }, [])
 
   /** Restores a past conversation from history into the active chat window. */
@@ -513,6 +525,7 @@ export function useChat() {
       const detail = await fetchConversation(id)
       setMessages(toMessages(detail))
       setConversationId(id)
+      setLockedViewMode(detail.viewMode)
     } catch {
       // Best-effort — if the conversation is gone (deleted/expired), do nothing.
     }
@@ -531,5 +544,7 @@ export function useChat() {
     selectSibling,
     loadConversation,
     conversationId,
+    activeViewMode,
+    canChangeViewMode: messages.length === 0,
   }
 }

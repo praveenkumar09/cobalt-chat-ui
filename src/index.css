@@ -433,6 +433,15 @@ textarea {
   transition: transform 0.08s cubic-bezier(0.4, 0, 1, 1);
 }
 
+.view-mode-toggle__btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.view-mode-toggle__btn:disabled:active {
+  transform: none;
+}
+
 .chat-header__text {
   min-width: 0;
 }
@@ -903,10 +912,6 @@ textarea {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-}
-
-.section-loading {
-  margin-top: 8px;
 }
 
 .status-shimmer__dot {
@@ -1612,6 +1617,24 @@ textarea {
   background: rgba(var(--tint-rgb), 0.06);
   padding: 1px 7px;
   border-radius: 6px;
+}
+
+.rel-section--placeholder {
+  opacity: 0.6;
+}
+
+.rel-section--placeholder .rel-section__header {
+  cursor: default;
+}
+
+.rel-section__placeholder-dot {
+  margin-left: auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+  flex-shrink: 0;
+  animation: pulse-dot 1.4s ease-in-out infinite;
 }
 
 .rel-section__body-frame {

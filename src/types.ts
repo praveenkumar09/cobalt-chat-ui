@@ -194,6 +194,7 @@ export interface ConversationMessage {
 export interface ConversationDetail {
   id: string
   title: string | null
+  viewMode: 'tech' | 'business'
   messages: ConversationMessage[]
 }
 

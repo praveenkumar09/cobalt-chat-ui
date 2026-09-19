@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Header } from './Header'
 import { MessageBubble } from './MessageBubble'
 import { ChatInput } from './ChatInput'
@@ -19,6 +19,7 @@ interface ChatWindowProps {
 }
 
 export function ChatWindow({ session, onLogout }: ChatWindowProps) {
+  const { viewMode, setViewMode } = useViewMode()
   const {
     messages,
     mode,
@@ -32,12 +33,13 @@ export function ChatWindow({ session, onLogout }: ChatWindowProps) {
     selectSibling,
     loadConversation,
     conversationId,
-  } = useChat()
+    activeViewMode,
+    canChangeViewMode,
+  } = useChat(viewMode)
   const { size, isDragging, handleProps } = useResizable()
   const { theme, toggleTheme } = useTheme()
   const { fontSize, setFontSize } = useFontSize()
   const { relationshipView, setRelationshipView } = useRelationshipView()
-  const { viewMode, setViewMode } = useViewMode()
   const { suggestions, loading: suggestionsLoading } = useSuggestions()
   // Full page by default after login — the existing shrink/expand toggle lets
   // the user collapse back to the floating resizable widget.
@@ -48,6 +50,12 @@ export function ChatWindow({ session, onLogout }: ChatWindowProps) {
   // Tracks whether the user is already at the bottom, so streaming tokens keep
   // the view pinned there without fighting a scroll they did to read upward.
   const stickToBottomRef = useRef(true)
+  // Lets handleBranch read the latest messages without depending on `messages`
+  // directly — that array gets a new reference on every streamed token, which
+  // would otherwise give handleBranch a new identity every frame too, and
+  // defeat MessageBubble's memoization (onBranch is one of its props).
+  const messagesRef = useRef(messages)
+  messagesRef.current = messages
 
   const handleSelectConversation = (id: string) => {
     loadConversation(id)
@@ -61,11 +69,11 @@ export function ChatWindow({ session, onLogout }: ChatWindowProps) {
     setHistoryOpen(false)
   }
 
-  const handleBranch = (messageId: string) => {
-    const source = messages.find((m) => m.id === messageId)
+  const handleBranch = useCallback((messageId: string) => {
+    const source = messagesRef.current.find((m) => m.id === messageId)
     const label = source ? source.content.slice(0, 60) : ''
     setBranchingFrom({ id: messageId, label })
-  }
+  }, [])
 
   const handleSend = (question: string) => {
     if (branchingFrom) {
@@ -123,8 +131,9 @@ export function ChatWindow({ session, onLogout }: ChatWindowProps) {
         onFontSizeChange={setFontSize}
         relationshipView={relationshipView}
         onRelationshipViewChange={setRelationshipView}
-        viewMode={viewMode}
+        viewMode={activeViewMode}
         onViewModeChange={setViewMode}
+        viewModeLocked={!canChangeViewMode}
         email={session.email}
         onLogout={onLogout}
       />
@@ -163,7 +172,7 @@ export function ChatWindow({ session, onLogout }: ChatWindowProps) {
               isBusy={isBusy}
               isLatest={i === messages.length - 1}
               relationshipView={relationshipView}
-              viewMode={viewMode}
+              viewMode={activeViewMode}
               responseMode={mode}
             />
           ))

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { AiaLogo } from './AiaLogo'
 import { StatusShimmer } from './StatusShimmer'
 import { HeartButton } from './HeartButton'
@@ -16,7 +16,7 @@ import { DecisionTableView } from './DecisionTableView'
 import { DataDictionaryView } from './DataDictionaryView'
 import { CodeReferenceModal } from './CodeReferenceModal'
 import { FollowUpSuggestions } from './FollowUpSuggestions'
-import { SectionLoading } from './SectionLoading'
+import { SectionPlaceholder } from './SectionPlaceholder'
 import { MarkdownMessage } from './MarkdownMessage'
 import type { BusinessFlow, GraphRelationship, Message, ResponseMode } from '../types'
 import type { RelationshipView } from '../hooks/useRelationshipView'
@@ -47,7 +47,17 @@ interface MessageBubbleProps {
   responseMode: ResponseMode
 }
 
-export function MessageBubble({
+// Memoized: ChatWindow re-renders on every streamed token (once per animation
+// frame — see useChat's updateMessage), and .map() over `messages` keeps the
+// same object reference for every message except the one actively streaming.
+// Without memo, every OTHER message's bubble (markdown parse, syntax
+// highlighting, chevron sections, etc.) would redo that work every frame too,
+// so the cost of a single streaming response scales with total conversation
+// length instead of staying constant — this is what makes a long conversation
+// feel increasingly janky. Requires every prop below to be reference-stable
+// across renders when the underlying data hasn't changed (see ChatWindow's
+// handleBranch for why that matters).
+function MessageBubbleComponent({
   message,
   onRegenerate,
   onAsk,
@@ -157,7 +167,7 @@ export function MessageBubble({
             {message.technicalRules ? (
               <TechnicalRulesView rules={message.technicalRules} onOpenReference={openReference} />
             ) : (
-              stillFilling && <SectionLoading label="Extracting technical rules" />
+              stillFilling && <SectionPlaceholder label="Technical rules" />
             )}
           </>
         )}
@@ -194,7 +204,7 @@ export function MessageBubble({
             {message.dataDictionary ? (
               <DataDictionaryView entries={message.dataDictionary} onOpenReference={openReference} />
             ) : (
-              stillFilling && <SectionLoading label="Extracting data dictionary" />
+              stillFilling && <SectionPlaceholder label="Data dictionary" />
             )}
           </>
         )}
@@ -204,12 +214,12 @@ export function MessageBubble({
             {message.businessRules ? (
               <BusinessRulesView rules={message.businessRules} onOpenReference={openReference} />
             ) : (
-              stillFilling && <SectionLoading label="Extracting business rules" />
+              stillFilling && <SectionPlaceholder label="Business rules" />
             )}
             {message.decisionTable ? (
               <DecisionTableView rows={message.decisionTable} onOpenReference={openReference} />
             ) : (
-              stillFilling && <SectionLoading label="Building decision table" />
+              stillFilling && <SectionPlaceholder label="Decision table" />
             )}
             {message.businessFlow ? (
               <KeyRelationships
@@ -218,7 +228,7 @@ export function MessageBubble({
                 label="Business flow"
               />
             ) : (
-              stillFilling && <SectionLoading label="Mapping business flow" />
+              stillFilling && <SectionPlaceholder label="Business flow" />
             )}
           </>
         )}
@@ -243,3 +253,5 @@ export function MessageBubble({
     </div>
   )
 }
+
+export const MessageBubble = memo(MessageBubbleComponent)

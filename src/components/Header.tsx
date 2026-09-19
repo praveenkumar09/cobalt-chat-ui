@@ -23,6 +23,7 @@ interface HeaderProps {
   onRelationshipViewChange: (view: RelationshipView) => void
   viewMode: ViewMode
   onViewModeChange: (mode: ViewMode) => void
+  viewModeLocked: boolean
   email: string
   onLogout: () => void
 }
@@ -78,6 +79,7 @@ export function Header({
   onRelationshipViewChange,
   viewMode,
   onViewModeChange,
+  viewModeLocked,
   email,
   onLogout,
 }: HeaderProps) {
@@ -225,10 +227,19 @@ export function Header({
                     <button
                       key={v}
                       type="button"
-                      className={v === viewMode ? 'view-mode-toggle__btn is-active' : 'view-mode-toggle__btn'}
-                      onClick={() => onViewModeChange(v)}
+                      className={
+                        v === viewMode
+                          ? 'view-mode-toggle__btn is-active'
+                          : 'view-mode-toggle__btn'
+                      }
+                      onClick={() => !viewModeLocked && onViewModeChange(v)}
+                      disabled={viewModeLocked}
                       aria-pressed={v === viewMode}
-                      title={VIEW_MODE_TITLE[v]}
+                      title={
+                        viewModeLocked
+                          ? 'Start a New Chat to switch modes — this conversation is locked to its starting mode'
+                          : VIEW_MODE_TITLE[v]
+                      }
                     >
                       {VIEW_MODE_LABEL[v]}
                     </button>
