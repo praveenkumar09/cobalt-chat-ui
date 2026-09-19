@@ -86,6 +86,18 @@ export interface BusinessFlow {
   edges: BusinessFlowEdge[]
 }
 
+export interface ScenarioStep {
+  condition: string
+  result: string
+  explanation: string
+  chunkId: string | null
+}
+
+export interface ScenarioTrace {
+  steps: ScenarioStep[]
+  outcome: string | null
+}
+
 export interface Message {
   id: string
   role: Role
@@ -108,6 +120,7 @@ export interface Message {
   businessFlow?: BusinessFlow | null
   dataDictionary?: DataDictionaryEntry[]
   technicalRules?: TechnicalRule[]
+  scenarioTrace?: ScenarioTrace | null
 }
 
 export interface AskResponse {
@@ -122,6 +135,7 @@ export interface AskResponse {
   businessFlow: BusinessFlow | null
   dataDictionary: DataDictionaryEntry[]
   technicalRules: TechnicalRule[]
+  scenarioTrace: ScenarioTrace | null
 }
 
 export type SseEvent =
@@ -142,6 +156,7 @@ export type SseEvent =
       businessFlow: null
       dataDictionary: DataDictionaryEntry[]
       technicalRules: TechnicalRule[]
+      scenarioTrace: null
     }
   | { type: 'followups'; questions: string[] }
   | { type: 'businessRules'; rules: BusinessRule[] }
@@ -150,6 +165,7 @@ export type SseEvent =
   | { type: 'dataDictionary'; entries: DataDictionaryEntry[] }
   | { type: 'technicalRules'; rules: TechnicalRule[] }
   | { type: 'impactAnalysis'; analysis: ImpactAnalysis }
+  | { type: 'scenarioTrace'; trace: ScenarioTrace }
 
 export type ResponseMode = 'stream' | 'complete'
 
@@ -166,6 +182,7 @@ export interface StoredMessagePayload {
   businessFlow?: BusinessFlow | null
   dataDictionary?: DataDictionaryEntry[]
   technicalRules?: TechnicalRule[]
+  scenarioTrace?: ScenarioTrace | null
 }
 
 export interface ConversationSummary {

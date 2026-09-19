@@ -17,6 +17,7 @@ import type {
   BusinessFlow,
   DataDictionaryEntry,
   TechnicalRule,
+  ScenarioTrace,
   Message,
   ResponseMode,
   SourceCitation,
@@ -83,6 +84,7 @@ function toMessages(detail: ConversationDetail): Message[] {
       businessFlow: m.payload?.businessFlow,
       dataDictionary: m.payload?.dataDictionary,
       technicalRules: m.payload?.technicalRules,
+      scenarioTrace: m.payload?.scenarioTrace,
       parentId: m.parentId,
       siblingIds: m.siblingIds,
       siblingIndex: m.siblingIndex,
@@ -174,6 +176,7 @@ export function useChat(headerViewMode: ViewMode) {
       let finalBusinessFlow: BusinessFlow | null | undefined
       let finalDataDictionary: DataDictionaryEntry[] | undefined
       let finalTechnicalRules: TechnicalRule[] | undefined
+      let finalScenarioTrace: ScenarioTrace | null | undefined
       let finalError = false
       // Reveals at most one animation frame's worth of newly-safe text at a
       // time (see nextRevealLength) instead of jumping straight to whatever
@@ -239,6 +242,7 @@ export function useChat(headerViewMode: ViewMode) {
                 businessFlow,
                 dataDictionary,
                 technicalRules,
+                scenarioTrace,
               ) => {
                 finalSources = sources
                 finalGraphContext = graphContext
@@ -248,6 +252,7 @@ export function useChat(headerViewMode: ViewMode) {
                 finalBusinessFlow = businessFlow
                 finalDataDictionary = dataDictionary
                 finalTechnicalRules = technicalRules
+                finalScenarioTrace = scenarioTrace
                 safeUpdate({
                   sources,
                   graphContext,
@@ -257,6 +262,7 @@ export function useChat(headerViewMode: ViewMode) {
                   businessFlow,
                   dataDictionary,
                   technicalRules,
+                  scenarioTrace,
                 })
               },
               onFollowups: (followUpQuestions) => {
@@ -287,6 +293,10 @@ export function useChat(headerViewMode: ViewMode) {
                 finalImpactAnalysis = analysis
                 safeUpdate({ impactAnalysis: analysis })
               },
+              onScenarioTrace: (trace) => {
+                finalScenarioTrace = trace
+                safeUpdate({ scenarioTrace: trace })
+              },
             },
             controller.signal,
           )
@@ -314,6 +324,7 @@ export function useChat(headerViewMode: ViewMode) {
           finalBusinessFlow = response.businessFlow
           finalDataDictionary = response.dataDictionary
           finalTechnicalRules = response.technicalRules
+          finalScenarioTrace = response.scenarioTrace
           safeUpdate({
             content: response.answer,
             sources: response.sources,
@@ -326,6 +337,7 @@ export function useChat(headerViewMode: ViewMode) {
             businessFlow: response.businessFlow,
             dataDictionary: response.dataDictionary,
             technicalRules: response.technicalRules,
+            scenarioTrace: response.scenarioTrace,
             isStreaming: false,
             stage: undefined,
           })
@@ -372,6 +384,7 @@ export function useChat(headerViewMode: ViewMode) {
         businessFlow: finalBusinessFlow,
         dataDictionary: finalDataDictionary,
         technicalRules: finalTechnicalRules,
+        scenarioTrace: finalScenarioTrace,
       }
       // Awaited so callers that need to re-sync with the server afterward (e.g.
       // branchFrom, to pick up sibling metadata) know the message has actually landed.
@@ -500,6 +513,7 @@ export function useChat(headerViewMode: ViewMode) {
         businessFlow: undefined,
         dataDictionary: undefined,
         technicalRules: undefined,
+        scenarioTrace: undefined,
       })
       await runAsk(target.sourceQuestion, assistantId, target.parentId ?? null, activeViewMode)
     },

@@ -1789,6 +1789,86 @@ textarea {
   font-size: 0.72rem;
 }
 
+/* ── Scenario simulator ───────────────────────────────────────────────── */
+
+.scenario-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0 10px 10px;
+  list-style: none;
+}
+
+.scenario-steps__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--ink);
+  opacity: 0;
+  animation: rel-row-in 0.36s cubic-bezier(0.3, 1.2, 0.5, 1) both;
+}
+
+.scenario-steps__number {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(var(--tint-rgb), 0.08);
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scenario-steps__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.scenario-steps__condition {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.scenario-steps__result {
+  color: var(--aia-red-dark);
+  font-weight: 600;
+}
+
+.scenario-steps__explanation {
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+
+.scenario-outcome {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 4px 10px 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(var(--tint-rgb), 0.05);
+  font-size: 0.8rem;
+  color: var(--ink);
+}
+
+.scenario-outcome__label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+  flex-shrink: 0;
+}
+
 /* ── Decision table ───────────────────────────────────────────────────── */
 
 .decision-table-frame {

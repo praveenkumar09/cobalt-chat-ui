@@ -12,6 +12,7 @@ import { ImpactAnalysisView } from './ImpactAnalysisView'
 import { BusinessRulesView } from './BusinessRulesView'
 import { TechnicalRulesView } from './TechnicalRulesView'
 import { DecisionTableView } from './DecisionTableView'
+import { ScenarioSimulatorView } from './ScenarioSimulatorView'
 import { DataDictionaryView } from './DataDictionaryView'
 import { CodeReferenceModal } from './CodeReferenceModal'
 import { ChangeImpactReport } from './ChangeImpactReport'
@@ -217,6 +218,9 @@ function MessageBubbleComponent({
               <DecisionTableView rows={message.decisionTable} onOpenReference={openReference} />
             ) : (
               stillFilling && <SectionPlaceholder label="Decision table" />
+            )}
+            {message.scenarioTrace && message.scenarioTrace.steps.length > 0 && (
+              <ScenarioSimulatorView trace={message.scenarioTrace} onOpenReference={openReference} />
             )}
             {message.businessFlow ? (
               <BusinessFlowSection flow={message.businessFlow} relationshipView={relationshipView} />

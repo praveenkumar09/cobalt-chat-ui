@@ -8,6 +8,7 @@ import type {
   BusinessFlow,
   DataDictionaryEntry,
   TechnicalRule,
+  ScenarioTrace,
   SseEvent,
   ConversationListResponse,
   ConversationDetail,
@@ -224,6 +225,7 @@ interface StreamHandlers {
     businessFlow: null,
     dataDictionary: DataDictionaryEntry[],
     technicalRules: TechnicalRule[],
+    scenarioTrace: null,
   ) => void
   onFollowups?: (questions: string[]) => void
   onBusinessRules?: (rules: BusinessRule[]) => void
@@ -232,6 +234,7 @@ interface StreamHandlers {
   onDataDictionary?: (entries: DataDictionaryEntry[]) => void
   onTechnicalRules?: (rules: TechnicalRule[]) => void
   onImpactAnalysis?: (analysis: ImpactAnalysis) => void
+  onScenarioTrace?: (trace: ScenarioTrace) => void
 }
 
 export async function askStream(
@@ -286,6 +289,7 @@ export async function askStream(
             parsed.businessFlow,
             parsed.dataDictionary,
             parsed.technicalRules,
+            parsed.scenarioTrace,
           )
         } else if (parsed.type === 'followups') {
           handlers.onFollowups?.(parsed.questions)
@@ -301,6 +305,8 @@ export async function askStream(
           handlers.onDataDictionary?.(parsed.entries)
         } else if (parsed.type === 'impactAnalysis') {
           handlers.onImpactAnalysis?.(parsed.analysis)
+        } else if (parsed.type === 'scenarioTrace') {
+          handlers.onScenarioTrace?.(parsed.trace)
         }
       } catch {
         // Ignore partial/malformed SSE frames — the buffer will complete on the next chunk.
