@@ -91,15 +91,23 @@ textarea {
   display: flex;
   flex-direction: column;
   background: rgba(var(--glass-rgb), 0.68);
-  backdrop-filter: blur(28px) saturate(160%);
-  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  /* Kept deliberately lighter than the 28px/160% this used to be: this is the
+     one backdrop-filter that's composited continuously for the entire chat
+     session (every other blur() in this file is login-screen-only), and
+     blur's compositing cost scales with the square of the radius. On a
+     machine without GPU-accelerated compositing (common on locked-down
+     corporate Edge installs — see edge://gpu vs chrome://gpu) a 28px blur
+     over the whole chat window falls back to software rasterization on
+     every repaint, which is what makes streaming feel jerky there even
+     though Edge and Chrome share the same Blink engine.  */
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
   border: 1px solid rgba(var(--tint-rgb), 0.08);
   border-radius: 18px;
   box-shadow:
     0 20px 45px rgba(var(--shadow-rgb), 0.12),
     inset 0 1px 0 var(--glass-sheen);
   overflow: hidden;
-  will-change: width, height;
   transition: background 0.25s ease, border-color 0.25s ease;
   /* Lets message-actions respond to the widget's own width (shrink mode
      resizes this element directly, independent of the viewport). */
