@@ -131,12 +131,11 @@ function MessageBubbleComponent({
         >
           {showStatus ? (
             <StatusShimmer stage={message.stage!} />
-          ) : !isUser && !message.error && !message.isStreaming ? (
-            <MarkdownMessage content={message.content} />
+          ) : !isUser && !message.error ? (
+            <MarkdownMessage content={message.content} isStreaming={message.isStreaming} />
           ) : (
             <span className="bubble__text">{message.content}</span>
           )}
-          {!isUser && message.isStreaming && message.content.length > 0 && <span className="bubble__caret" />}
         </div>
 
         {showActions && (

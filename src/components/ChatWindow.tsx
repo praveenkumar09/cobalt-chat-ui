@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
+import { useStickToBottom } from 'use-stick-to-bottom'
 import { Header } from './Header'
 import { MessageBubble } from './MessageBubble'
 import { ChatInput } from './ChatInput'
@@ -46,10 +47,12 @@ export function ChatWindow({ session, onLogout }: ChatWindowProps) {
   const [easyMode, setEasyMode] = useState(true)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [branchingFrom, setBranchingFrom] = useState<{ id: string; label: string } | null>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
-  // Tracks whether the user is already at the bottom, so streaming tokens keep
-  // the view pinned there without fighting a scroll they did to read upward.
-  const stickToBottomRef = useRef(true)
+  // Handles "stay pinned to bottom while streaming, but stop fighting the user
+  // the moment they scroll up to read" — same behavior the hand-rolled
+  // scroll-listener + scrollTop-snapping used to provide, now via a
+  // dedicated, tested hook (also gives escapedFromLock/isAtBottom for free if
+  // a "jump to latest" affordance is ever wanted).
+  const { scrollRef, contentRef } = useStickToBottom({ initial: 'instant', resize: 'instant' })
   // Lets handleBranch read the latest messages without depending on `messages`
   // directly — that array gets a new reference on every streamed token, which
   // would otherwise give handleBranch a new identity every frame too, and
@@ -85,27 +88,6 @@ export function ChatWindow({ session, onLogout }: ChatWindowProps) {
     }
   }
 
-  useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    const handleScroll = () => {
-      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
-      stickToBottomRef.current = distanceFromBottom < 80
-    }
-    el.addEventListener('scroll', handleScroll, { passive: true })
-    return () => el.removeEventListener('scroll', handleScroll)
-  }, [])
-
-  useEffect(() => {
-    const el = scrollRef.current
-    if (!el || !stickToBottomRef.current) return
-    // Streaming updates fire on every token — an animated `behavior: 'smooth'`
-    // scroll restarted that often fights its own previous animation and
-    // visibly bounces. Snapping instantly instead makes the view simply
-    // follow the growing content, which reads as smooth continuous scroll.
-    el.scrollTop = el.scrollHeight
-  }, [messages])
-
   const windowClassName = [
     'chat-window',
     isDragging ? 'chat-window--dragging' : '',
@@ -139,44 +121,46 @@ export function ChatWindow({ session, onLogout }: ChatWindowProps) {
       />
 
       <div className="chat-body" ref={scrollRef}>
-        {messages.length === 0 ? (
-          <div className="empty-state">
-            <img className="empty-state__hero" src="/aia-orbit-hero.png" alt="AIA Orbit mascot" />
-            <h2>How can I help you today?</h2>
-            <p>Ask anything about your AIA policies, claims, or coverage.</p>
-            <div className="suggestion-list">
-              {suggestionsLoading ? (
-                <>
-                  <span className="suggestion-chip suggestion-chip--skeleton" aria-hidden="true" />
-                  <span className="suggestion-chip suggestion-chip--skeleton" aria-hidden="true" />
-                  <span className="suggestion-chip suggestion-chip--skeleton" aria-hidden="true" />
-                </>
-              ) : (
-                suggestions.map((s) => (
-                  <button key={s} type="button" className="suggestion-chip" onClick={() => send(s)}>
-                    {s}
-                  </button>
-                ))
-              )}
+        <div className="chat-body__content" ref={contentRef}>
+          {messages.length === 0 ? (
+            <div className="empty-state">
+              <img className="empty-state__hero" src="/aia-orbit-hero.png" alt="AIA Orbit mascot" />
+              <h2>How can I help you today?</h2>
+              <p>Ask anything about your AIA policies, claims, or coverage.</p>
+              <div className="suggestion-list">
+                {suggestionsLoading ? (
+                  <>
+                    <span className="suggestion-chip suggestion-chip--skeleton" aria-hidden="true" />
+                    <span className="suggestion-chip suggestion-chip--skeleton" aria-hidden="true" />
+                    <span className="suggestion-chip suggestion-chip--skeleton" aria-hidden="true" />
+                  </>
+                ) : (
+                  suggestions.map((s) => (
+                    <button key={s} type="button" className="suggestion-chip" onClick={() => send(s)}>
+                      {s}
+                    </button>
+                  ))
+                )}
+              </div>
             </div>
-          </div>
-        ) : (
-          messages.map((message, i) => (
-            <MessageBubble
-              key={message.id}
-              message={message}
-              onRegenerate={regenerate}
-              onAsk={send}
-              onBranch={handleBranch}
-              onSelectSibling={selectSibling}
-              isBusy={isBusy}
-              isLatest={i === messages.length - 1}
-              relationshipView={relationshipView}
-              viewMode={activeViewMode}
-              responseMode={mode}
-            />
-          ))
-        )}
+          ) : (
+            messages.map((message, i) => (
+              <MessageBubble
+                key={message.id}
+                message={message}
+                onRegenerate={regenerate}
+                onAsk={send}
+                onBranch={handleBranch}
+                onSelectSibling={selectSibling}
+                isBusy={isBusy}
+                isLatest={i === messages.length - 1}
+                relationshipView={relationshipView}
+                viewMode={activeViewMode}
+                responseMode={mode}
+              />
+            ))
+          )}
+        </div>
       </div>
 
       {branchingFrom && (

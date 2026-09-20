@@ -562,11 +562,21 @@ textarea {
 .chat-body {
   flex: 1;
   overflow-y: auto;
+  background: transparent;
+}
+
+/* Separate from .chat-body itself: use-stick-to-bottom measures this element's
+   height to detect growth, so the scroll container (overflow-y) and the
+   growing content (flex layout/padding) need to be different elements. */
+.chat-body__content {
+  /* Fills .chat-body's height (not just its own content's) so .empty-state's
+     margin:auto still centers it when there's nothing to scroll yet; grows
+     past 100% naturally once messages exceed the viewport. */
+  min-height: 100%;
   padding: 18px 16px;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  background: transparent;
 }
 
 .chat-body::-webkit-scrollbar {
@@ -793,27 +803,48 @@ textarea {
   }
 }
 
-.bubble__caret {
-  display: inline-block;
-  width: 2px;
-  height: 14px;
-  margin-left: 2px;
-  vertical-align: middle;
-  background: var(--ink);
-  animation: blink 0.9s step-start infinite;
-}
-
 @keyframes blink {
   50% {
     opacity: 0;
   }
 }
 
-/* ── Rendered markdown (settled assistant messages only — see MessageBubble) ─ */
+/* ── Rendered markdown (live during streaming — see MessageBubble) ──────────── */
 
 .md-content {
   white-space: normal;
   overflow-wrap: break-word;
+}
+
+/* Blinking cursor while the answer is still generating. Targets the LAST
+   top-level block's own trailing edge (not a sibling after the whole
+   markdown tree) so it sits right after the last character for the common
+   case (last block is a paragraph/list item) instead of dropping to a new
+   line below it. */
+.md-content--streaming > :last-child::after {
+  content: '';
+  display: inline-block;
+  width: 2px;
+  height: 0.9em;
+  margin-left: 2px;
+  vertical-align: middle;
+  background: var(--ink);
+  animation: blink 0.9s step-start infinite;
+}
+
+/* Matches .code-block's resting look (border/background) minus the toolbar
+   and highlighting, which only appear once the fence closes and this swaps
+   for the real CodeBlock component — see MarkdownMessage. */
+.md-code-pending {
+  margin: 8px 10px 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--surface-solid);
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  white-space: pre;
 }
 
 .md-content > *:first-child {
@@ -3124,6 +3155,9 @@ span.code-line-removed {
   max-width: 780px;
   width: 100%;
   margin: 0 auto;
+}
+
+.chat-window--easy .chat-body__content {
   padding: 26px 20px;
   gap: 20px;
 }
