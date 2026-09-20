@@ -11,6 +11,18 @@ services:
     container_name: cobalt_chat_ui
     ports:
       - "3000:80"
+    # This serves a pre-built static bundle via nginx — it was never CPU/memory
+    # bound (nginx serving static files is negligible load), so this isn't
+    # where demo slowness comes from. Set anyway since it was asked for, with
+    # headroom well above what nginx actually needs.
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 64M
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80 || exit 1"]
       interval: 15s
