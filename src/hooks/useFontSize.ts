@@ -15,10 +15,10 @@ const SCALES: Record<FontSize, number> = {
 export const FONT_SIZE_ORDER: FontSize[] = ['sm', 'md', 'lg', 'xl']
 
 function getInitialFontSize(): FontSize {
-  if (typeof window === 'undefined') return 'md'
+  if (typeof window === 'undefined') return 'sm'
   const stored = window.localStorage.getItem(STORAGE_KEY)
   if (stored === 'sm' || stored === 'md' || stored === 'lg' || stored === 'xl') return stored
-  return 'md'
+  return 'sm'
 }
 
 export function useFontSize() {
