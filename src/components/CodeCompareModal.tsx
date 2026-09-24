@@ -93,6 +93,35 @@ export function CodeCompareModal({
   const [proposeError, setProposeError] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
 
+  // onToken fires once per streamed chunk (often many per second). Setting
+  // state directly there re-renders CodeBlock — and its Prism syntax
+  // highlighter re-tokenizes the ENTIRE accumulated text — on every single
+  // chunk, growing larger each time. That's what was freezing the tab
+  // during generation. Instead, accumulate into a ref and flush to state at
+  // most once per animation frame, capping re-renders (and re-highlights)
+  // to ~60/sec regardless of how fast chunks arrive.
+  const pendingStreamTextRef = useRef('')
+  const streamFlushHandleRef = useRef<number | null>(null)
+
+  const flushStreamingText = () => {
+    setStreamingText(pendingStreamTextRef.current)
+    streamFlushHandleRef.current = null
+  }
+
+  const queueStreamingTextUpdate = (text: string) => {
+    pendingStreamTextRef.current = text
+    if (streamFlushHandleRef.current == null) {
+      streamFlushHandleRef.current = window.requestAnimationFrame(flushStreamingText)
+    }
+  }
+
+  const cancelPendingStreamFlush = () => {
+    if (streamFlushHandleRef.current != null) {
+      window.cancelAnimationFrame(streamFlushHandleRef.current)
+      streamFlushHandleRef.current = null
+    }
+  }
+
   useEffect(() => {
     if (!isOpen || !programId) return
     setSource(null)
@@ -120,7 +149,12 @@ export function CodeCompareModal({
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [isOpen, onClose])
 
-  useEffect(() => () => abortRef.current?.abort(), [])
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort()
+      cancelPendingStreamFlush()
+    }
+  }, [])
 
   const handleGenerate = async () => {
     if (!programId) return
@@ -128,6 +162,8 @@ export function CodeCompareModal({
     setProposeError(false)
     setProposedSource(null)
     setStreamingText('')
+    pendingStreamTextRef.current = ''
+    cancelPendingStreamFlush()
 
     const controller = new AbortController()
     abortRef.current = controller
@@ -143,7 +179,7 @@ export function CodeCompareModal({
           {
             onToken: (content) => {
               accumulated += content
-              setStreamingText(accumulated)
+              queueStreamingTextUpdate(accumulated)
             },
             onError: () => {
               sawError = true
@@ -151,6 +187,7 @@ export function CodeCompareModal({
           },
           controller.signal,
         )
+        cancelPendingStreamFlush()
         if (sawError || !accumulated.trim()) {
           setProposeError(true)
         } else {

@@ -9,6 +9,16 @@ SyntaxHighlighter.registerLanguage('cobol', cobol)
 
 const PREVIEW_LINES = 12
 const LINE_HEIGHT_PX = 19
+// Prism (react-syntax-highlighter) re-tokenizes the ENTIRE text on every
+// render, with no windowing — for a real ~10,000-line COBOL program that's
+// a multi-second synchronous main-thread block, worse during streaming
+// (see CodeCompareModal) where it reruns on every growing chunk. Past this
+// many lines, skip Prism entirely and fall back to the plain-table renderer
+// below (no tokenization cost — still has line numbers and diff-line
+// coloring, just no syntax colors) rather than let file size alone freeze
+// the tab. Chosen well above PREVIEW_LINES (normal files never hit it) but
+// well below where Prism visibly starts to hurt.
+const PLAIN_RENDER_LINE_THRESHOLD = 1500
 
 export type CodeLanguage = 'cobol' | null
 export type DiffLineKind = 'same' | 'added' | 'removed'
@@ -40,6 +50,7 @@ export function CodeBlock({
   const lines = useMemo(() => trimmed.split('\n'), [trimmed])
   const collapsible = collapsibleProp && lines.length > PREVIEW_LINES
   const isCollapsed = collapsible && !expanded
+  const useSyntaxHighlighting = !!language && lines.length <= PLAIN_RENDER_LINE_THRESHOLD
 
   const lineClassName = (lineNumber: number): string | undefined => {
     const kind = lineKinds?.[lineNumber - startLine]
@@ -116,7 +127,7 @@ export function CodeBlock({
         className={`code-block__body${isCollapsed ? ' is-collapsed' : ''}`}
         style={isCollapsed ? { maxHeight: PREVIEW_LINES * LINE_HEIGHT_PX + 16 } : undefined}
       >
-        {language ? (
+        {useSyntaxHighlighting ? (
           <SyntaxHighlighter
             language={language}
             style={theme === 'dark' ? oneDark : oneLight}
