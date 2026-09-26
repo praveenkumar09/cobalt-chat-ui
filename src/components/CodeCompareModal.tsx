@@ -130,6 +130,14 @@ export function CodeCompareModal({
     setStreamingText('')
     setProposeError(false)
     setSourceLoading(true)
+    // Defensive, alongside the abort below: aborting a fetch/stream rejects
+    // its promise on the next microtask, not synchronously, so without this
+    // there's a brief window — between this effect's synchronous body
+    // running and that rejection reaching handleGenerate's `finally` — where
+    // `proposing` would still read true from whatever program was
+    // previously open, flashing "Generating…" for a program that never
+    // asked for it.
+    setProposing(false)
 
     const controller = new AbortController()
     fetchProgramSource(programId, controller.signal)
@@ -137,7 +145,23 @@ export function CodeCompareModal({
       .catch(() => setSourceError(true))
       .finally(() => setSourceLoading(false))
 
-    return () => controller.abort()
+    // This modal never unmounts (see the always-rendered JSX below — it's
+    // shown/hidden purely via the `is-open` CSS class), so the OTHER cleanup
+    // effect below (empty deps, unmount-only) never fires when the user
+    // simply closes this modal or switches to a different impacted node —
+    // only when the whole component instance is torn down, which in
+    // practice is never. Without aborting HERE too, a still-streaming
+    // handleGenerate() call for the PREVIOUS program keeps running in the
+    // background and its setProposing/setProposedSource calls land on
+    // whichever program is now being viewed — showing another program's
+    // (still-generating or already-finished) proposed change, diffed
+    // against the wrong "current" source. Aborting on every isOpen/programId
+    // change — not just on unmount — closes that gap.
+    return () => {
+      controller.abort()
+      abortRef.current?.abort()
+      cancelPendingStreamFlush()
+    }
   }, [isOpen, programId])
 
   useEffect(() => {
