@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
-import { diffLines } from 'diff'
-import { fetchProgramSource, proposeChange, proposeChangeStream } from '../api/ragClient'
-import { CodeBlock, type DiffLineKind } from './CodeBlock'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { RagApiError, fetchProgramSource, proposeChange, proposeChangeStream } from '../api/ragClient'
+import { CodeBlock } from './CodeBlock'
+import { DiffPanel } from './DiffPanel'
+import { buildDiffSegments } from '../utils/diffHunks'
 import type { ProgramSource, ResponseMode } from '../types'
 
 interface CodeCompareModalProps {
@@ -14,54 +15,28 @@ interface CodeCompareModalProps {
   onClose: () => void
 }
 
-/** Splits a line-level diff into two independently-scrollable columns: the
- * original file (unchanged + removed lines) and the proposed file (unchanged
- * + added lines) — a classic side-by-side compare, not a strictly-aligned grid. */
-function splitDiff(current: string, proposed: string): { left: DiffLineKind[]; right: DiffLineKind[]; leftText: string; rightText: string } {
-  const parts = diffLines(current, proposed)
-  const left: DiffLineKind[] = []
-  const right: DiffLineKind[] = []
-  const leftLines: string[] = []
-  const rightLines: string[] = []
-
-  for (const part of parts) {
-    const lines = part.value.replace(/\n$/, '').split('\n')
-    if (part.added) {
-      lines.forEach((text) => {
-        right.push('added')
-        rightLines.push(text)
-      })
-    } else if (part.removed) {
-      lines.forEach((text) => {
-        left.push('removed')
-        leftLines.push(text)
-      })
-    } else {
-      lines.forEach((text) => {
-        left.push('same')
-        leftLines.push(text)
-        right.push('same')
-        rightLines.push(text)
-      })
-    }
-  }
-
-  return { left, right, leftText: leftLines.join('\n'), rightText: rightLines.join('\n') }
-}
-
 /** Defensively strips a stray ``` fence the model might wrap the output in,
  * despite being told not to — mirrors the same cleanup CodeChangeService
- * applies server-side for the non-streaming path. */
+ * applies server-side. Must NOT trim real content: COBOL is column-sensitive
+ * (a section header must start in a specific column), and the backend already
+ * guarantees no fence wrapper and preserved indentation — an outer `.trim()`
+ * here would silently strip line 1's real leading whitespace, corrupting the
+ * file and producing a bogus one-line diff against the unmodified original. */
 function stripCodeFences(text: string): string {
-  let trimmed = text.trim()
-  if (trimmed.startsWith('```')) {
-    const firstNewline = trimmed.indexOf('\n')
-    if (firstNewline !== -1) trimmed = trimmed.slice(firstNewline + 1)
-    const lastFence = trimmed.lastIndexOf('```')
-    if (lastFence !== -1) trimmed = trimmed.slice(0, lastFence)
+  if (!text.startsWith('```')) return text
+  const firstNewline = text.indexOf('\n')
+  let body = firstNewline !== -1 ? text.slice(firstNewline + 1) : text
+  if (body.endsWith('```')) {
+    body = body.slice(0, -3)
+    if (body.endsWith('\n')) body = body.slice(0, -1)
+  } else {
+    const lastFence = body.lastIndexOf('\n```')
+    if (lastFence !== -1) body = body.slice(0, lastFence)
   }
-  return trimmed.trim()
+  return body
 }
+
+const GENERIC_PROPOSE_ERROR = "Couldn't generate a proposed change."
 
 function Shimmer({ label }: { label: string }) {
   return (
@@ -69,6 +44,21 @@ function Shimmer({ label }: { label: string }) {
       <span className="status-shimmer__dot" />
       <span className="status-shimmer__text">{label}</span>
     </span>
+  )
+}
+
+/** The agent's locate/generate/splice narration — see CodeChangeService's Javadoc
+ * for what actually produces each line. Shown live as steps arrive (Live mode) or
+ * all at once alongside the result (Full mode), and kept visible after success or
+ * failure so the user can see how the agent got there, not just the outcome. */
+function ThinkingLog({ steps }: { steps: string[] }) {
+  if (steps.length === 0) return null
+  return (
+    <ul className="code-compare-thinking">
+      {steps.map((step, i) => (
+        <li key={i}>{step}</li>
+      ))}
+    </ul>
   )
 }
 
@@ -85,50 +75,25 @@ export function CodeCompareModal({
   const [sourceLoading, setSourceLoading] = useState(false)
   const [sourceError, setSourceError] = useState(false)
 
-  // Partial text while a stream is in flight (Live mode) — swapped for the
-  // finalized, diffed version once generation completes.
-  const [streamingText, setStreamingText] = useState('')
   const [proposedSource, setProposedSource] = useState<string | null>(null)
   const [proposing, setProposing] = useState(false)
-  const [proposeError, setProposeError] = useState(false)
+  // The agent's "thinking" narration, in order — locate/generate/splice steps for a
+  // large file, or a single fast-path note for a small one. Populated live as events
+  // arrive in Live mode, or all at once alongside the result/error in Full mode.
+  const [thinkingSteps, setThinkingSteps] = useState<string[]>([])
+  // The specific reason generation failed (e.g. "Couldn't confidently identify which
+  // section…"), not just a boolean — so the user sees why, not just that. null means
+  // no error; a non-null string (including '') means show it.
+  const [proposeError, setProposeError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
-
-  // onToken fires once per streamed chunk (often many per second). Setting
-  // state directly there re-renders CodeBlock — and its Prism syntax
-  // highlighter re-tokenizes the ENTIRE accumulated text — on every single
-  // chunk, growing larger each time. That's what was freezing the tab
-  // during generation. Instead, accumulate into a ref and flush to state at
-  // most once per animation frame, capping re-renders (and re-highlights)
-  // to ~60/sec regardless of how fast chunks arrive.
-  const pendingStreamTextRef = useRef('')
-  const streamFlushHandleRef = useRef<number | null>(null)
-
-  const flushStreamingText = () => {
-    setStreamingText(pendingStreamTextRef.current)
-    streamFlushHandleRef.current = null
-  }
-
-  const queueStreamingTextUpdate = (text: string) => {
-    pendingStreamTextRef.current = text
-    if (streamFlushHandleRef.current == null) {
-      streamFlushHandleRef.current = window.requestAnimationFrame(flushStreamingText)
-    }
-  }
-
-  const cancelPendingStreamFlush = () => {
-    if (streamFlushHandleRef.current != null) {
-      window.cancelAnimationFrame(streamFlushHandleRef.current)
-      streamFlushHandleRef.current = null
-    }
-  }
 
   useEffect(() => {
     if (!isOpen || !programId) return
     setSource(null)
     setSourceError(false)
     setProposedSource(null)
-    setStreamingText('')
-    setProposeError(false)
+    setThinkingSteps([])
+    setProposeError(null)
     setSourceLoading(true)
     // Defensive, alongside the abort below: aborting a fetch/stream rejects
     // its promise on the next microtask, not synchronously, so without this
@@ -160,7 +125,6 @@ export function CodeCompareModal({
     return () => {
       controller.abort()
       abortRef.current?.abort()
-      cancelPendingStreamFlush()
     }
   }, [isOpen, programId])
 
@@ -176,61 +140,65 @@ export function CodeCompareModal({
   useEffect(() => {
     return () => {
       abortRef.current?.abort()
-      cancelPendingStreamFlush()
     }
   }, [])
 
   const handleGenerate = async () => {
     if (!programId) return
     setProposing(true)
-    setProposeError(false)
+    setProposeError(null)
     setProposedSource(null)
-    setStreamingText('')
-    pendingStreamTextRef.current = ''
-    cancelPendingStreamFlush()
+    setThinkingSteps([])
 
     const controller = new AbortController()
     abortRef.current = controller
 
     try {
       if (mode === 'stream') {
-        let accumulated = ''
-        let sawError = false
+        let result: string | null = null
+        let errorMessage: string | null = null
         await proposeChangeStream(
           programId,
           question ?? '',
           answer ?? '',
           {
-            onToken: (content) => {
-              accumulated += content
-              queueStreamingTextUpdate(accumulated)
+            onThinking: (message) => {
+              setThinkingSteps((prev) => [...prev, message])
             },
-            onError: () => {
-              sawError = true
+            onResult: (proposedSource) => {
+              result = proposedSource
+            },
+            onError: (message) => {
+              errorMessage = message || GENERIC_PROPOSE_ERROR
             },
           },
           controller.signal,
         )
-        cancelPendingStreamFlush()
-        if (sawError || !accumulated.trim()) {
-          setProposeError(true)
+        if (errorMessage || !result) {
+          setProposeError(errorMessage ?? GENERIC_PROPOSE_ERROR)
         } else {
-          setProposedSource(stripCodeFences(accumulated))
+          setProposedSource(stripCodeFences(result))
         }
       } else {
-        const proposed = await proposeChange(programId, question ?? '', answer ?? '', controller.signal)
-        setProposedSource(stripCodeFences(proposed))
+        const { proposedSource, steps } = await proposeChange(programId, question ?? '', answer ?? '', controller.signal)
+        setThinkingSteps(steps)
+        setProposedSource(stripCodeFences(proposedSource))
       }
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
-        setProposeError(true)
+        const apiErr = err instanceof RagApiError ? err : null
+        setProposeError((err as Error).message || GENERIC_PROPOSE_ERROR)
+        if (apiErr?.steps) setThinkingSteps(apiErr.steps)
       }
     } finally {
       setProposing(false)
     }
   }
 
-  const diff = source && proposedSource ? splitDiff(source.content, proposedSource) : null
+  const diff = useMemo(
+    () => (source && proposedSource ? buildDiffSegments(source.content, proposedSource) : null),
+    [source, proposedSource],
+  )
   const downloadBase = programId ?? 'program'
 
   return (
@@ -260,14 +228,22 @@ export function CodeCompareModal({
               {sourceLoading && <Shimmer label="Loading source…" />}
               {sourceError && <p className="code-compare-empty">Source not available for this file.</p>}
               {!sourceLoading && !sourceError && source && (
-                <CodeBlock
-                  code={diff ? diff.leftText : source.content}
-                  language="cobol"
-                  startLine={1}
-                  downloadName={`${downloadBase}-current.cbl`}
-                  collapsible={false}
-                  lineKinds={diff?.left}
-                />
+                diff ? (
+                  <DiffPanel
+                    segments={diff.left}
+                    fullText={source.content}
+                    downloadName={`${downloadBase}-current.cbl`}
+                    resetKey={proposedSource ?? ''}
+                  />
+                ) : (
+                  <CodeBlock
+                    code={source.content}
+                    language="cobol"
+                    startLine={1}
+                    downloadName={`${downloadBase}-current.cbl`}
+                    collapsible={false}
+                  />
+                )
               )}
             </div>
           </div>
@@ -278,27 +254,24 @@ export function CodeCompareModal({
             </div>
             <div className="code-compare-panel__body">
               {diff ? (
-                <CodeBlock
-                  code={diff.rightText}
-                  language="cobol"
-                  startLine={1}
-                  downloadName={`${downloadBase}-proposed.cbl`}
-                  collapsible={false}
-                  lineKinds={diff.right}
-                />
-              ) : proposing && streamingText ? (
-                <CodeBlock
-                  code={streamingText}
-                  language="cobol"
-                  startLine={1}
-                  downloadName={`${downloadBase}-proposed.cbl`}
-                  collapsible={false}
-                />
+                <>
+                  <ThinkingLog steps={thinkingSteps} />
+                  <DiffPanel
+                    segments={diff.right}
+                    fullText={proposedSource ?? ''}
+                    downloadName={`${downloadBase}-proposed.cbl`}
+                    resetKey={proposedSource ?? ''}
+                  />
+                </>
               ) : proposing ? (
-                <Shimmer label="Generating proposed change…" />
+                <div className="code-compare-idle code-compare-idle--thinking">
+                  <ThinkingLog steps={thinkingSteps} />
+                  <Shimmer label={thinkingSteps.length > 0 ? thinkingSteps[thinkingSteps.length - 1] : 'Generating proposed change…'} />
+                </div>
               ) : proposeError ? (
                 <div className="code-compare-idle">
-                  <p>Couldn&rsquo;t generate a proposed change.</p>
+                  <ThinkingLog steps={thinkingSteps} />
+                  <p>{proposeError}</p>
                   <button type="button" className="code-compare-generate-btn" onClick={handleGenerate} disabled={!source}>
                     Try again
                   </button>

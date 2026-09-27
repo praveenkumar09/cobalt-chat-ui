@@ -2206,6 +2206,18 @@ textarea {
   font-style: italic;
 }
 
+/* Clarifies what the tier list below actually means — reviewed, not
+   guaranteed to need a code edit — since "Generate proposed change" can
+   honestly report no code change was needed for a listed file. */
+.impact-legend {
+  margin: 0 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 0.7rem;
+  line-height: 1.4;
+  color: var(--ink-faint);
+}
+
 /* ── Hub layout ────────────────────────────────────────────────────────── */
 
 .hub {
@@ -2627,6 +2639,44 @@ textarea {
   font-size: 0.82rem;
 }
 
+.code-compare-idle--thinking {
+  justify-content: flex-start;
+}
+
+/* The agent's locate/generate/splice narration — left-aligned, monospace-adjacent
+   log rather than the centered idle/error copy above it, since it's a sequence of
+   distinct steps, not a single message. */
+.code-compare-thinking {
+  list-style: none;
+  margin: 0;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  width: 100%;
+}
+
+.code-compare-thinking li {
+  padding-left: 16px;
+  position: relative;
+  line-height: 1.4;
+}
+
+.code-compare-thinking li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tint, var(--aia-red));
+  opacity: 0.55;
+}
+
 .code-compare-generate-btn {
   border: none;
   background: var(--aia-red);
@@ -2653,6 +2703,34 @@ textarea {
 .code-compare-generate-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* A collapsed diff segment's "Show N unchanged lines" toggle row, GitHub-PR
+   style — replaces the hidden lines entirely in the DOM until clicked, which
+   is what keeps a huge file with a small localized change cheap to render. */
+tr.diff-expand-row {
+  background: rgba(var(--tint-rgb), 0.05);
+}
+
+.diff-expand-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 500;
+  padding: 3px 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s ease;
+}
+
+.diff-expand-btn:hover {
+  color: var(--aia-red);
 }
 
 /* Row-level tint for the plain (no-language) table fallback... */

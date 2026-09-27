@@ -20,7 +20,15 @@ import { getSessionToken } from '../utils/session'
 
 const BASE_URL = (import.meta.env.VITE_RAG_API_BASE_URL as string | undefined) ?? 'http://localhost:8083'
 
-export class RagApiError extends Error {}
+export class RagApiError extends Error {
+  /** The agent's "thinking" narration up to the point it gave up, when the
+   * error came from a propose-change 422 response — see proposeChange. */
+  steps?: string[]
+  constructor(message: string, steps?: string[]) {
+    super(message)
+    this.steps = steps
+  }
+}
 
 function clientHeaders(extra?: Record<string, string>): Record<string, string> {
   return { 'X-Session-Token': getSessionToken(), ...extra }
@@ -105,33 +113,90 @@ export async function fetchProgramSource(programId: string, signal?: AbortSignal
   return (await res.json()) as ProgramSource
 }
 
-/** LLM-generated proposed modification to the program, grounded in its real current source. */
+/** LLM-generated proposed modification to the program, grounded in its real current
+ * source — via a locate/generate/splice agent for a file too large to send whole (see
+ * CodeChangeService's Javadoc). `steps` is the agent's "thinking" narration, always
+ * returned alongside the result so the UI can show how it got there. */
 export async function proposeChange(
   programId: string,
   question: string,
   answer: string,
   signal?: AbortSignal,
-): Promise<string> {
+): Promise<{ proposedSource: string; steps: string[] }> {
   const res = await fetch(`${BASE_URL}/api/programs/${encodeURIComponent(programId)}/propose-change`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ question, answer }),
     signal,
   })
+  // 422 (the agent couldn't confidently locate or apply a change) still carries a
+  // JSON body with a specific `error` message and the `steps` it took before giving
+  // up — read both before falling back to the generic message, same as the streaming
+  // variant does for its 'error' event.
+  if (!res.ok) {
+    if (res.status === 422) {
+      try {
+        const data = (await res.json()) as { error?: string; steps?: string[] }
+        if (data.error) throw new RagApiError(data.error, data.steps)
+      } catch (err) {
+        if (err instanceof RagApiError) throw err
+      }
+    }
+    throw new RagApiError(`Request failed with status ${res.status}`)
+  }
+  const data = (await res.json()) as { proposedSource: string; steps?: string[] }
+  return { proposedSource: data.proposedSource, steps: data.steps ?? [] }
+}
+
+/**
+ * LLM-generated functional requirement document for one already-answered question,
+ * grounded in the question/answer plus whatever business rules/decision table/data
+ * dictionary entries were already extracted for that same answer — no re-retrieval,
+ * so this only needs what's already on the Message. Backs "Export Functional
+ * Requirement Report" (see FunctionalRequirementReport.tsx), available for every
+ * business-mode answer, unlike the scenario-only Change Impact Report.
+ */
+export async function fetchFunctionalRequirement(
+  question: string,
+  answer: string,
+  businessRules: BusinessRule[] | undefined,
+  decisionTable: DecisionTableRow[] | undefined,
+  dataDictionary: DataDictionaryEntry[] | undefined,
+  signal?: AbortSignal,
+): Promise<string> {
+  const res = await fetch(`${BASE_URL}/api/functional-requirement`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      question,
+      answer,
+      businessRules: businessRules ?? [],
+      decisionTable: decisionTable ?? [],
+      dataDictionary: dataDictionary ?? [],
+    }),
+    signal,
+  })
   if (!res.ok) {
     throw new RagApiError(`Request failed with status ${res.status}`)
   }
-  const data = (await res.json()) as { proposedSource: string }
-  return data.proposedSource
+  const data = (await res.json()) as { requirement: string }
+  return data.requirement
 }
 
 interface ProposeChangeStreamHandlers {
-  onToken: (content: string) => void
-  onError?: () => void
+  /** Fires once per agent "thinking" step, in order — locate → generate → splice
+   * narration for a large file, or a single fast-path note for a small one. */
+  onThinking?: (message: string) => void
+  /** Fires exactly once, with the final complete (already-spliced) proposed source,
+   * when generation succeeds. */
+  onResult: (proposedSource: string) => void
+  onError?: (message?: string) => void
 }
 
 /** Streaming variant of {@link proposeChange} — used when the user's Live/Full
- * response-mode setting is "Live", same SSE shape as {@link askStream}. */
+ * response-mode setting is "Live". Unlike {@link askStream}, there are no 'token'
+ * events: a proposed change only makes sense as one complete, already-spliced file,
+ * not a growing fragment — the 'thinking' events ARE the live progress signal here. */
 export async function proposeChangeStream(
   programId: string,
   question: string,
@@ -170,11 +235,13 @@ export async function proposeChangeStream(
       if (payload === '[DONE]') return
 
       try {
-        const parsed = JSON.parse(payload) as { type: string; content?: string }
-        if (parsed.type === 'token' && parsed.content) {
-          handlers.onToken(parsed.content)
+        const parsed = JSON.parse(payload) as { type: string; message?: string; proposedSource?: string }
+        if (parsed.type === 'thinking' && parsed.message) {
+          handlers.onThinking?.(parsed.message)
+        } else if (parsed.type === 'result' && parsed.proposedSource) {
+          handlers.onResult(parsed.proposedSource)
         } else if (parsed.type === 'error') {
-          handlers.onError?.()
+          handlers.onError?.(parsed.message)
         }
       } catch {
         // Ignore partial/malformed SSE frames — the buffer will complete on the next chunk.

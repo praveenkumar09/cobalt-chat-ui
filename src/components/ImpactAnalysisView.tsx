@@ -25,6 +25,10 @@ export function ImpactAnalysisView({ analysis, question, answer, mode }: ImpactA
     <>
       <CollapsibleSection label="Impact analysis" count={totalNodes}>
         <div className="impact-content">
+          <p className="impact-legend">
+            Files worth reviewing for this change — not all of them will need a code edit. Open a file and generate a
+            proposed change to see whether its own code actually needs to change.
+          </p>
           {analysis.tiers.map((tier, i) => (
             <div className="impact-tier" key={tier.order} style={{ animationDelay: `${i * 90}ms` }}>
               <div className="impact-tier__marker">
