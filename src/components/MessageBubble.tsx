@@ -19,6 +19,8 @@ import { ChangeImpactReport } from './ChangeImpactReport'
 import { ExportReportButton } from './ExportReportButton'
 import { FunctionalRequirementReport } from './FunctionalRequirementReport'
 import { ExportFunctionalRequirementButton } from './ExportFunctionalRequirementButton'
+import { TestScenarioReport } from './TestScenarioReport'
+import { ExportTestScenariosButton } from './ExportTestScenariosButton'
 import { BusinessFlowSection } from './BusinessFlowSection'
 import { FollowUpSuggestions } from './FollowUpSuggestions'
 import { SectionPlaceholder } from './SectionPlaceholder'
@@ -66,6 +68,7 @@ function MessageBubbleComponent({
   const [openRefProgramId, setOpenRefProgramId] = useState<string | null>(null)
   const [isReportOpen, setIsReportOpen] = useState(false)
   const [isFunctionalRequirementOpen, setIsFunctionalRequirementOpen] = useState(false)
+  const [isTestScenariosOpen, setIsTestScenariosOpen] = useState(false)
   const openRefCitation = message.sources?.find((s) => s.chunkId === openRefChunkId) ?? null
 
   const openReference = (chunkId: string) => {
@@ -99,6 +102,14 @@ function MessageBubbleComponent({
   // is generated fresh from the question/answer rather than assembled from
   // whichever structured fields happen to be non-empty.
   const showFunctionalRequirement = showActions && viewMode === 'business'
+  // Only worth offering when there's actually a business rule or decision
+  // table row to derive test cases from — unlike the functional requirement
+  // above (which handles an empty input honestly in its own document), an
+  // empty test-scenario report is just a button that produces nothing useful.
+  const showTestScenarios =
+    showActions &&
+    viewMode === 'business' &&
+    (!!message.businessRules?.length || !!message.decisionTable?.length)
   const showFollowups =
     isLatest &&
     !isUser &&
@@ -161,6 +172,9 @@ function MessageBubbleComponent({
             {showFunctionalRequirement && (
               <ExportFunctionalRequirementButton onClick={() => setIsFunctionalRequirementOpen(true)} />
             )}
+            {showTestScenarios && (
+              <ExportTestScenariosButton onClick={() => setIsTestScenariosOpen(true)} />
+            )}
           </div>
         )}
 
@@ -198,12 +212,13 @@ function MessageBubbleComponent({
             />
           )}
 
-        {viewMode === 'tech' && !isUser && !message.error && message.impactAnalysis && (
+        {!isUser && !message.error && message.impactAnalysis && (
           <ImpactAnalysisView
             analysis={message.impactAnalysis}
             question={message.sourceQuestion}
             answer={message.content}
             mode={responseMode}
+            viewMode={viewMode}
           />
         )}
 
@@ -267,6 +282,14 @@ function MessageBubbleComponent({
           message={message}
           isOpen={isFunctionalRequirementOpen}
           onClose={() => setIsFunctionalRequirementOpen(false)}
+        />
+      )}
+
+      {showTestScenarios && (
+        <TestScenarioReport
+          message={message}
+          isOpen={isTestScenariosOpen}
+          onClose={() => setIsTestScenariosOpen(false)}
         />
       )}
     </div>

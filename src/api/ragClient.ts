@@ -116,13 +116,16 @@ export async function fetchProgramSource(programId: string, signal?: AbortSignal
 /** LLM-generated proposed modification to the program, grounded in its real current
  * source — via a locate/generate/splice agent for a file too large to send whole (see
  * CodeChangeService's Javadoc). `steps` is the agent's "thinking" narration, always
- * returned alongside the result so the UI can show how it got there. */
+ * returned alongside the result so the UI can show how it got there. `businessSummary`
+ * is only present when the agent could translate the diff into plain business language
+ * (see CodeCompareModal's Business-view rendering) — absent for a technical-only run
+ * (e.g. the whole-file fallback path found no clean before/after span to summarize). */
 export async function proposeChange(
   programId: string,
   question: string,
   answer: string,
   signal?: AbortSignal,
-): Promise<{ proposedSource: string; steps: string[] }> {
+): Promise<{ proposedSource: string; steps: string[]; businessSummary: string | null }> {
   const res = await fetch(`${BASE_URL}/api/programs/${encodeURIComponent(programId)}/propose-change`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -144,8 +147,8 @@ export async function proposeChange(
     }
     throw new RagApiError(`Request failed with status ${res.status}`)
   }
-  const data = (await res.json()) as { proposedSource: string; steps?: string[] }
-  return { proposedSource: data.proposedSource, steps: data.steps ?? [] }
+  const data = (await res.json()) as { proposedSource: string; steps?: string[]; businessSummary?: string | null }
+  return { proposedSource: data.proposedSource, steps: data.steps ?? [], businessSummary: data.businessSummary ?? null }
 }
 
 /**
@@ -183,13 +186,46 @@ export async function fetchFunctionalRequirement(
   return data.requirement
 }
 
+/**
+ * LLM-generated QA test-scenario document for one already-answered question,
+ * grounded in the question/answer plus whatever business rules/decision table
+ * were already extracted for that same answer — no re-retrieval, same pattern
+ * as {@link fetchFunctionalRequirement}. Backs "Export Test Scenarios" (see
+ * TestScenarioReport.tsx).
+ */
+export async function fetchTestScenarios(
+  question: string,
+  answer: string,
+  businessRules: BusinessRule[] | undefined,
+  decisionTable: DecisionTableRow[] | undefined,
+  signal?: AbortSignal,
+): Promise<string> {
+  const res = await fetch(`${BASE_URL}/api/test-scenarios`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      question,
+      answer,
+      businessRules: businessRules ?? [],
+      decisionTable: decisionTable ?? [],
+    }),
+    signal,
+  })
+  if (!res.ok) {
+    throw new RagApiError(`Request failed with status ${res.status}`)
+  }
+  const data = (await res.json()) as { scenarios: string }
+  return data.scenarios
+}
+
 interface ProposeChangeStreamHandlers {
   /** Fires once per agent "thinking" step, in order — locate → generate → splice
    * narration for a large file, or a single fast-path note for a small one. */
   onThinking?: (message: string) => void
   /** Fires exactly once, with the final complete (already-spliced) proposed source,
-   * when generation succeeds. */
-  onResult: (proposedSource: string) => void
+   * when generation succeeds. `businessSummary` is present only when the agent could
+   * translate the diff into plain business language. */
+  onResult: (proposedSource: string, businessSummary: string | null) => void
   onError?: (message?: string) => void
 }
 
@@ -235,11 +271,16 @@ export async function proposeChangeStream(
       if (payload === '[DONE]') return
 
       try {
-        const parsed = JSON.parse(payload) as { type: string; message?: string; proposedSource?: string }
+        const parsed = JSON.parse(payload) as {
+          type: string
+          message?: string
+          proposedSource?: string
+          businessSummary?: string
+        }
         if (parsed.type === 'thinking' && parsed.message) {
           handlers.onThinking?.(parsed.message)
         } else if (parsed.type === 'result' && parsed.proposedSource) {
-          handlers.onResult(parsed.proposedSource)
+          handlers.onResult(parsed.proposedSource, parsed.businessSummary ?? null)
         } else if (parsed.type === 'error') {
           handlers.onError?.(parsed.message)
         }

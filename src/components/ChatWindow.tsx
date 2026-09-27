@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStickToBottom } from 'use-stick-to-bottom'
 import { Header } from './Header'
 import { MessageBubble } from './MessageBubble'
@@ -53,6 +53,39 @@ export function ChatWindow({ session, onLogout }: ChatWindowProps) {
   // dedicated, tested hook (also gives escapedFromLock/isAtBottom for free if
   // a "jump to latest" affordance is ever wanted).
   const { scrollRef, contentRef } = useStickToBottom({ initial: 'instant', resize: 'instant' })
+  // use-stick-to-bottom's own follow-while-streaming mechanism (a
+  // ResizeObserver driving its internal scrollToBottom animation
+  // state-machine) is proven unreliable in this app on a long conversation.
+  // Traced it live end to end (patched the library with logging): its
+  // ResizeObserver goes silent for most of a growing answer, and even when
+  // driven directly from React's `messages` updates instead (bypassing the
+  // observer entirely, confirmed firing via a render counter), repeated
+  // scrollToBottom({animation:'instant'}) calls in quick succession still
+  // failed to converge on the real, live-growing target — while a plain
+  // `el.scrollTop = el.scrollHeight` on that exact same element worked
+  // instantly, every time. So: use the library only for initial positioning
+  // and its escape/isAtBottom bookkeeping, and drive the actual "stay
+  // pinned while streaming" behavior with our own direct DOM write, gated
+  // by a "was I already near the bottom" flag tracked from real scroll
+  // events (so a genuine manual scroll-up to read isn't fought).
+  const scrollElRef = useRef<HTMLDivElement | null>(null)
+  const stickToBottomRef = useRef(true)
+  const attachScrollTracking = useCallback((el: HTMLDivElement | null) => {
+    scrollRef(el)
+    scrollElRef.current = el
+    if (!el) return
+    const NEAR_BOTTOM_PX = 100
+    const update = () => {
+      stickToBottomRef.current = el.scrollHeight - el.clientHeight - el.scrollTop <= NEAR_BOTTOM_PX
+    }
+    update()
+    el.addEventListener('scroll', update, { passive: true })
+  }, [scrollRef])
+  useEffect(() => {
+    if (stickToBottomRef.current && scrollElRef.current) {
+      scrollElRef.current.scrollTop = scrollElRef.current.scrollHeight
+    }
+  }, [messages])
   // Lets handleBranch read the latest messages without depending on `messages`
   // directly — that array gets a new reference on every streamed token, which
   // would otherwise give handleBranch a new identity every frame too, and
@@ -120,7 +153,7 @@ export function ChatWindow({ session, onLogout }: ChatWindowProps) {
         onLogout={onLogout}
       />
 
-      <div className="chat-body" ref={scrollRef}>
+      <div className="chat-body" ref={attachScrollTracking}>
         <div className="chat-body__content" ref={contentRef}>
           {messages.length === 0 ? (
             <div className="empty-state">

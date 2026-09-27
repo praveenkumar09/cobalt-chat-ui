@@ -3,12 +3,14 @@ import { CollapsibleSection } from './CollapsibleSection'
 import { NodePill } from './KeyRelationships'
 import { CodeCompareModal } from './CodeCompareModal'
 import type { ImpactAnalysis, ResponseMode } from '../types'
+import type { ViewMode } from '../hooks/useViewMode'
 
 interface ImpactAnalysisViewProps {
   analysis: ImpactAnalysis
   question?: string
   answer?: string
   mode: ResponseMode
+  viewMode: ViewMode
 }
 
 function tierTitle(index: number, hasCycle: boolean): string {
@@ -16,7 +18,7 @@ function tierTitle(index: number, hasCycle: boolean): string {
   return index === 0 ? 'Change first' : 'Then update'
 }
 
-export function ImpactAnalysisView({ analysis, question, answer, mode }: ImpactAnalysisViewProps) {
+export function ImpactAnalysisView({ analysis, question, answer, mode, viewMode }: ImpactAnalysisViewProps) {
   const [selected, setSelected] = useState<{ id: string; label: string } | null>(null)
   const totalNodes = analysis.tiers.reduce((sum, t) => sum + t.nodes.length, 0)
   if (totalNodes === 0) return null
@@ -66,6 +68,7 @@ export function ImpactAnalysisView({ analysis, question, answer, mode }: ImpactA
         question={question}
         answer={answer}
         mode={mode}
+        viewMode={viewMode}
         onClose={() => setSelected(null)}
       />
     </>

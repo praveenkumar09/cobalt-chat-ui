@@ -4,6 +4,7 @@ import { CodeBlock } from './CodeBlock'
 import { DiffPanel } from './DiffPanel'
 import { buildDiffSegments } from '../utils/diffHunks'
 import type { ProgramSource, ResponseMode } from '../types'
+import type { ViewMode } from '../hooks/useViewMode'
 
 interface CodeCompareModalProps {
   isOpen: boolean
@@ -12,8 +13,11 @@ interface CodeCompareModalProps {
   question?: string
   answer?: string
   mode: ResponseMode
+  viewMode: ViewMode
   onClose: () => void
 }
+
+type DiffSegments = ReturnType<typeof buildDiffSegments>
 
 /** Defensively strips a stray ``` fence the model might wrap the output in,
  * despite being told not to — mirrors the same cleanup CodeChangeService
@@ -62,6 +66,107 @@ function ThinkingLog({ steps }: { steps: string[] }) {
   )
 }
 
+interface TechnicalPanelsProps {
+  source: ProgramSource | null
+  sourceLoading: boolean
+  sourceError: boolean
+  diff: DiffSegments | null
+  proposedSource: string | null
+  proposing: boolean
+  proposeError: string | null
+  thinkingSteps: string[]
+  downloadBase: string
+  onGenerate: () => void
+}
+
+/** The Current/Proposed side-by-side technical diff — exactly what Tech view
+ * always showed. Business view reuses this unchanged as its opt-in "show
+ * technical code changes" panel, so there's exactly one implementation of the
+ * diff rendering regardless of which view opened it. */
+function TechnicalPanels({
+  source,
+  sourceLoading,
+  sourceError,
+  diff,
+  proposedSource,
+  proposing,
+  proposeError,
+  thinkingSteps,
+  downloadBase,
+  onGenerate,
+}: TechnicalPanelsProps) {
+  return (
+    <>
+      <div className="code-compare-panel">
+        <div className="code-compare-panel__header">
+          <span>Current</span>
+        </div>
+        <div className="code-compare-panel__body">
+          {sourceLoading && <Shimmer label="Loading source…" />}
+          {sourceError && <p className="code-compare-empty">Source not available for this file.</p>}
+          {!sourceLoading && !sourceError && source && (
+            diff ? (
+              <DiffPanel
+                segments={diff.left}
+                fullText={source.content}
+                downloadName={`${downloadBase}-current.cbl`}
+                resetKey={proposedSource ?? ''}
+              />
+            ) : (
+              <CodeBlock
+                code={source.content}
+                language="cobol"
+                startLine={1}
+                downloadName={`${downloadBase}-current.cbl`}
+                collapsible={false}
+              />
+            )
+          )}
+        </div>
+      </div>
+
+      <div className="code-compare-panel">
+        <div className="code-compare-panel__header">
+          <span>Proposed</span>
+        </div>
+        <div className="code-compare-panel__body">
+          {diff ? (
+            <>
+              <ThinkingLog steps={thinkingSteps} />
+              <DiffPanel
+                segments={diff.right}
+                fullText={proposedSource ?? ''}
+                downloadName={`${downloadBase}-proposed.cbl`}
+                resetKey={proposedSource ?? ''}
+              />
+            </>
+          ) : proposing ? (
+            <div className="code-compare-idle code-compare-idle--thinking">
+              <ThinkingLog steps={thinkingSteps} />
+              <Shimmer label={thinkingSteps.length > 0 ? thinkingSteps[thinkingSteps.length - 1] : 'Generating proposed change…'} />
+            </div>
+          ) : proposeError ? (
+            <div className="code-compare-idle">
+              <ThinkingLog steps={thinkingSteps} />
+              <p>{proposeError}</p>
+              <button type="button" className="code-compare-generate-btn" onClick={onGenerate} disabled={!source}>
+                Try again
+              </button>
+            </div>
+          ) : (
+            <div className="code-compare-idle">
+              <p>See how this file might change to implement the recommendation.</p>
+              <button type="button" className="code-compare-generate-btn" onClick={onGenerate} disabled={!source}>
+                Generate proposed change
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  )
+}
+
 export function CodeCompareModal({
   isOpen,
   programId,
@@ -69,6 +174,7 @@ export function CodeCompareModal({
   question,
   answer,
   mode,
+  viewMode,
   onClose,
 }: CodeCompareModalProps) {
   const [source, setSource] = useState<ProgramSource | null>(null)
@@ -76,6 +182,15 @@ export function CodeCompareModal({
   const [sourceError, setSourceError] = useState(false)
 
   const [proposedSource, setProposedSource] = useState<string | null>(null)
+  // Plain-English translation of the diff, from CodeChangeService's
+  // generateBusinessSummary — non-null only on a successful generation where
+  // one could be produced. Business view leads with this instead of the raw
+  // diff; Tech view never reads it.
+  const [businessSummary, setBusinessSummary] = useState<string | null>(null)
+  // Business view's opt-in reveal of the same technical diff Tech view always
+  // shows — starts collapsed so the plain-language summary is what a
+  // non-technical reviewer sees first.
+  const [showTechnicalDiff, setShowTechnicalDiff] = useState(false)
   const [proposing, setProposing] = useState(false)
   // The agent's "thinking" narration, in order — locate/generate/splice steps for a
   // large file, or a single fast-path note for a small one. Populated live as events
@@ -87,11 +202,15 @@ export function CodeCompareModal({
   const [proposeError, setProposeError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
+  const isBusinessView = viewMode === 'business'
+
   useEffect(() => {
     if (!isOpen || !programId) return
     setSource(null)
     setSourceError(false)
     setProposedSource(null)
+    setBusinessSummary(null)
+    setShowTechnicalDiff(false)
     setThinkingSteps([])
     setProposeError(null)
     setSourceLoading(true)
@@ -148,6 +267,8 @@ export function CodeCompareModal({
     setProposing(true)
     setProposeError(null)
     setProposedSource(null)
+    setBusinessSummary(null)
+    setShowTechnicalDiff(false)
     setThinkingSteps([])
 
     const controller = new AbortController()
@@ -156,6 +277,7 @@ export function CodeCompareModal({
     try {
       if (mode === 'stream') {
         let result: string | null = null
+        let summary: string | null = null
         let errorMessage: string | null = null
         await proposeChangeStream(
           programId,
@@ -165,8 +287,9 @@ export function CodeCompareModal({
             onThinking: (message) => {
               setThinkingSteps((prev) => [...prev, message])
             },
-            onResult: (proposedSource) => {
+            onResult: (proposedSource, businessSummary) => {
               result = proposedSource
+              summary = businessSummary
             },
             onError: (message) => {
               errorMessage = message || GENERIC_PROPOSE_ERROR
@@ -178,11 +301,14 @@ export function CodeCompareModal({
           setProposeError(errorMessage ?? GENERIC_PROPOSE_ERROR)
         } else {
           setProposedSource(stripCodeFences(result))
+          setBusinessSummary(summary)
         }
       } else {
-        const { proposedSource, steps } = await proposeChange(programId, question ?? '', answer ?? '', controller.signal)
+        const { proposedSource, steps, businessSummary } =
+          await proposeChange(programId, question ?? '', answer ?? '', controller.signal)
         setThinkingSteps(steps)
         setProposedSource(stripCodeFences(proposedSource))
+        setBusinessSummary(businessSummary)
       }
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
@@ -200,6 +326,23 @@ export function CodeCompareModal({
     [source, proposedSource],
   )
   const downloadBase = programId ?? 'program'
+  // In Business view, the summary leads and the diff is opt-in; if no summary
+  // could be generated, auto-reveal the diff instead so a business reviewer
+  // still gets something rather than nothing.
+  const revealTechnicalDiff = showTechnicalDiff || (!!diff && !businessSummary)
+
+  const technicalPanelsProps: TechnicalPanelsProps = {
+    source,
+    sourceLoading,
+    sourceError,
+    diff,
+    proposedSource,
+    proposing,
+    proposeError,
+    thinkingSteps,
+    downloadBase,
+    onGenerate: handleGenerate,
+  }
 
   return (
     <>
@@ -219,79 +362,72 @@ export function CodeCompareModal({
           </button>
         </div>
 
-        <div className="code-compare-modal__body">
-          <div className="code-compare-panel">
-            <div className="code-compare-panel__header">
-              <span>Current</span>
-            </div>
-            <div className="code-compare-panel__body">
-              {sourceLoading && <Shimmer label="Loading source…" />}
-              {sourceError && <p className="code-compare-empty">Source not available for this file.</p>}
-              {!sourceLoading && !sourceError && source && (
-                diff ? (
-                  <DiffPanel
-                    segments={diff.left}
-                    fullText={source.content}
-                    downloadName={`${downloadBase}-current.cbl`}
-                    resetKey={proposedSource ?? ''}
-                  />
+        {isBusinessView ? (
+          <div className="code-compare-modal__body code-compare-modal__body--business">
+            {!diff ? (
+              <div className="code-compare-idle">
+                {sourceLoading ? (
+                  <Shimmer label="Loading source…" />
+                ) : sourceError ? (
+                  <p className="code-compare-empty">Source not available for this file.</p>
+                ) : proposing ? (
+                  <>
+                    <ThinkingLog steps={thinkingSteps} />
+                    <Shimmer label={thinkingSteps.length > 0 ? thinkingSteps[thinkingSteps.length - 1] : 'Generating proposed change…'} />
+                  </>
+                ) : proposeError ? (
+                  <>
+                    <ThinkingLog steps={thinkingSteps} />
+                    <p>{proposeError}</p>
+                    <button type="button" className="code-compare-generate-btn" onClick={handleGenerate} disabled={!source}>
+                      Try again
+                    </button>
+                  </>
                 ) : (
-                  <CodeBlock
-                    code={source.content}
-                    language="cobol"
-                    startLine={1}
-                    downloadName={`${downloadBase}-current.cbl`}
-                    collapsible={false}
-                  />
-                )
-              )}
-            </div>
-          </div>
+                  <>
+                    <p>See what this change would actually do to {programLabel}, described in plain language.</p>
+                    <button type="button" className="code-compare-generate-btn" onClick={handleGenerate} disabled={!source}>
+                      Generate proposed change
+                    </button>
+                  </>
+                )}
+              </div>
+            ) : (
+              <>
+                {businessSummary ? (
+                  <div className="business-impact-summary">
+                    <span className="business-impact-summary__label">What this change does</span>
+                    <p>{businessSummary}</p>
+                  </div>
+                ) : (
+                  <p className="impact-legend">
+                    A plain-language summary wasn&rsquo;t available for this change — showing the technical view instead.
+                  </p>
+                )}
 
-          <div className="code-compare-panel">
-            <div className="code-compare-panel__header">
-              <span>Proposed</span>
-            </div>
-            <div className="code-compare-panel__body">
-              {diff ? (
-                <>
-                  <ThinkingLog steps={thinkingSteps} />
-                  <DiffPanel
-                    segments={diff.right}
-                    fullText={proposedSource ?? ''}
-                    downloadName={`${downloadBase}-proposed.cbl`}
-                    resetKey={proposedSource ?? ''}
-                  />
-                </>
-              ) : proposing ? (
-                <div className="code-compare-idle code-compare-idle--thinking">
-                  <ThinkingLog steps={thinkingSteps} />
-                  <Shimmer label={thinkingSteps.length > 0 ? thinkingSteps[thinkingSteps.length - 1] : 'Generating proposed change…'} />
-                </div>
-              ) : proposeError ? (
-                <div className="code-compare-idle">
-                  <ThinkingLog steps={thinkingSteps} />
-                  <p>{proposeError}</p>
-                  <button type="button" className="code-compare-generate-btn" onClick={handleGenerate} disabled={!source}>
-                    Try again
-                  </button>
-                </div>
-              ) : (
-                <div className="code-compare-idle">
-                  <p>See how this file might change to implement the recommendation.</p>
+                {businessSummary && (
                   <button
                     type="button"
-                    className="code-compare-generate-btn"
-                    onClick={handleGenerate}
-                    disabled={!source}
+                    className="code-compare-toggle-technical"
+                    onClick={() => setShowTechnicalDiff((v) => !v)}
                   >
-                    Generate proposed change
+                    {revealTechnicalDiff ? 'Hide technical code changes' : 'Show technical code changes'}
                   </button>
-                </div>
-              )}
-            </div>
+                )}
+
+                {revealTechnicalDiff && (
+                  <div className="code-compare-modal__body code-compare-modal__body--nested">
+                    <TechnicalPanels {...technicalPanelsProps} />
+                  </div>
+                )}
+              </>
+            )}
           </div>
-        </div>
+        ) : (
+          <div className="code-compare-modal__body">
+            <TechnicalPanels {...technicalPanelsProps} />
+          </div>
+        )}
       </div>
     </>
   )
